@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>おチンチロ</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      font-family: "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(255, 215, 120, 0.14), transparent 32%),
+        linear-gradient(180deg, #12070a 0%, #1f0d12 45%, #0b0507 100%);
+      color: #fff7ef;
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .bg-glow {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255, 170, 90, 0.12), transparent 20%),
+        radial-gradient(circle at 80% 30%, rgba(255, 120, 120, 0.10), transparent 24%),
+        radial-gradient(circle at 50% 85%, rgba(255, 220, 120, 0.08), transparent 28%);
+      filter: blur(10px);
+    }
+
+    .wrap {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .panel {
+      width: min(680px, 100%);
+      padding: 44px 40px 36px;
+      border-radius: 28px;
+      background: rgba(20, 8, 12, 0.78);
+      border: 1px solid rgba(255, 230, 200, 0.12);
+      box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+    }
+
+    .title-box {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .sub {
+      font-size: 14px;
+      letter-spacing: 0.32em;
+      color: rgba(255, 235, 215, 0.7);
+      margin-left: 0.32em;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(48px, 8vw, 88px);
+      line-height: 1;
+      letter-spacing: 0.08em;
+      color: #ffe0b2;
+      text-shadow:
+        0 0 18px rgba(255, 185, 110, 0.25),
+        0 6px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    .desc {
+      margin: 0;
+      font-size: 15px;
+      color: rgba(255, 240, 226, 0.8);
+      text-align: center;
+    }
+
+    .form {
+      width: min(420px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field label {
+      font-size: 14px;
+      color: rgba(255, 236, 219, 0.88);
+      padding-left: 2px;
+    }
+
+    .field input {
+      width: 100%;
+      height: 54px;
+      border: 1px solid rgba(255, 220, 190, 0.18);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff8f1;
+      padding: 0 16px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    .field input::placeholder {
+      color: rgba(255, 235, 220, 0.35);
+    }
+
+    .field input:focus {
+      border-color: rgba(255, 196, 120, 0.62);
+      background: rgba(255, 255, 255, 0.09);
+      box-shadow: 0 0 0 4px rgba(255, 180, 100, 0.10);
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 6px;
+    }
+
+    .enter-btn {
+      width: 100%;
+      height: 56px;
+      border: 0;
+      border-radius: 16px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #2c1209;
+      background: linear-gradient(180deg, #ffd28f 0%, #ffb860 100%);
+      box-shadow:
+        0 10px 24px rgba(255, 157, 77, 0.24),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    }
+
+    .enter-btn:hover {
+      transform: translateY(-1px);
+      box-shadow:
+        0 14px 28px rgba(255, 157, 77, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      filter: brightness(1.02);
+    }
+
+    .enter-btn:active {
+      transform: translateY(1px);
+    }
+
+    .note {
+      min-height: 22px;
+      margin: 0;
+      text-align: center;
+      font-size: 14px;
+      color: rgba(255, 233, 211, 0.78);
+    }
+
+    .footer-note {
+      font-size: 12px;
+      color: rgba(255, 229, 205, 0.46);
+      text-align: center;
+    }
+
+    @media (max-width: 640px) {
+      .panel {
+        padding: 32px 20px 24px;
+        border-radius: 22px;
+        gap: 22px;
+      }
+
+      .field input,
+      .enter-btn {
+        height: 50px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <div class="wrap">
+    <main class="panel">
+      <div class="title-box">
+        <div class="sub">OCHINCHIRO BEST BODY</div>
+        <h1>おチンチロ</h1>
+      </div>
+
+      <form class="form" id="homeForm" autocomplete="off">
+        <div class="field">
+          <label for="playerName">名前</label>
+          <input id="playerName" name="playerName" type="text" maxlength="16" placeholder="名前を入力" />
+        </div>
+
+        <div class="field">
+          <label for="roomWord">合言葉</label>
+          <input id="roomWord" name="roomWord" type="text" maxlength="24" placeholder="合言葉を入力" />
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="enter-btn">入場する</button>
+          <p class="note" id="message"></p>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <script>
+    const form = document.getElementById("homeForm");
+    const roomWordInput = document.getElementById("roomWord");
+    const playerNameInput = document.getElementById("playerName");
+    const message = document.getElementById("message");
+
+    function showMessage(text) {
+      message.textContent = text;
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const roomWord = roomWordInput.value.trim();
+      const playerName = playerNameInput.value.trim();
+
+      if (!roomWord) {
+        showMessage("合言葉を入力してください。");
+        roomWordInput.focus();
+        return;
+      }
+
+      if (!playerName) {
+        showMessage("名前を入力してください。");
+        playerNameInput.focus();
+        return;
+      }
+
+      localStorage.setItem("ochinchiro_room_word", roomWord);
+      localStorage.setItem("ochinchiro_player_name", playerName);
+
+      showMessage("入力を保存しました。次の画面につなげられます。");
+    });
+  </script>
+</body>
+</html>

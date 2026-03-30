@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>代々大富豪</title>
+  <style>
+    :root {
+      --bg1: #1a1034;
+      --bg2: #2a174f;
+      --bg3: #120a24;
+      --panel: rgba(18, 10, 36, 0.78);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f8f5ff;
+      --accent: #f6c453;
+      --accent-2: #ffe39a;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+      --radius: 28px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(246, 196, 83, 0.22), transparent 28%),
+        radial-gradient(circle at top right, rgba(255, 227, 154, 0.12), transparent 22%),
+        linear-gradient(145deg, var(--bg1), var(--bg2) 52%, var(--bg3));
+      overflow: hidden;
+    }
+
+    body.inRoom {
+      background:
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.06), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(0, 0, 0, 0.22), transparent 28%),
+        linear-gradient(145deg, #0a3d28, #0d5b3b 54%, #072a1d);
+    }
+
+    .screen {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 24px;
+      gap: 16px;
+    }
+
+    body.inRoom .screen {
+      padding: 0;
+      gap: 0;
+    }
+
+    .panel {
+      width: min(100%, 560px);
+      padding: 34px 30px 28px;
+      border-radius: var(--radius);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    .roomPanel {
+      width: min(100%, 860px);
+      height: min(100dvh - 28px, 920px);
+      overflow: hidden;
+      background: rgba(8, 46, 31, 0.82);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    body.inRoom .roomPanel {
+      width: 100vw;
+      height: 100dvh;
+      max-width: none;
+      border-radius: 0;
+      border: 0;
+      box-shadow: none;
+      padding: 8px 10px;
+      overflow: hidden;
+    }
+
+    body.inRoom .roomHead {
+      justify-content: flex-end;
+      align-items: center;
+      margin-bottom: 0;
+      min-height: 40px;
+    }
+
+    body.inRoom .topInfoBar,
+    body.inRoom .compactLine,
+    body.inRoom .rulesText,
+    body.inRoom .fieldPanel {
+      display: none;
+    }
+
+    .hidden { display: none !important; }
+    .entryTopBar {
+      width: min(100%, 960px);
+      display: flex;
+      justify-content: flex-start;
+    }
+    .loginInfoBar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08);
+      margin-bottom: 12px;
+    }
+    .loginInfoPhoto {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
+    .loginInfoText {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .loginInfoName {
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .loginInfoSub {
+      font-size: 12px;
+      color: rgba(248,245,255,0.68);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    body.inRoom .entryTopBar {
+      display: none;
+    }
+    body.inRoom .loginInfoBar {
+      margin-bottom: 0;
+      margin-right: auto;
+      padding: 6px 10px;
+      border-radius: 12px;
+      max-width: min(52vw, 420px);
+    }
+    body.inRoom .loginInfoPhoto {
+      width: 34px;
+      height: 34px;
+    }
+    body.inRoom .loginInfoName {
+      font-size: 13px;
+    }
+    body.inRoom .loginInfoSub {
+      font-size: 11px;
+    }
+    .titleWrap { text-align: center; margin-bottom: 28px; }
+    .crest {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 14px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 34px;
+      background: linear-gradient(145deg, rgba(246,196,83,0.18), rgba(255,227,154,0.08));
+      border: 1px solid rgba(246,196,83,0.28);
+    }
+
+    h1 { margin: 0; font-size: clamp(34px, 5vw, 48px); line-height: 1.1; letter-spacing: 0.04em; }
+    .roomHead, .settingsHead, .handHead, .fieldHead {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .roomTitle, .settingsTitle, .handTitle, .fieldTitle, .resultTitle {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+    .roomMini {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: rgba(255,243,204,0.72);
+      margin-bottom: 6px;
+    }
+
+    .form, .settingsList { display: grid; gap: 12px; }
+    .membersList {
+      position: relative;
+      min-height: 360px;
+      margin: 6px 0;
+      border-radius: 28px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background:
+        radial-gradient(circle at center, rgba(255,255,255,0.06), transparent 52%),
+        radial-gradient(circle at center, rgba(0,0,0,0.18), transparent 70%),
+        linear-gradient(145deg, rgba(6,46,28,0.82), rgba(7,62,37,0.9));
+      overflow: hidden;
+      flex: 1 1 auto;
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr) 180px;
+      gap: 12px;
+      padding: 14px;
+      align-items: stretch;
+    }
+    .sideInfoCol {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+    .sideInfoCard {
+      padding: 10px 10px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.16);
+    }
+    .sideInfoCard span {
+      display: block;
+      font-size: 10px;
+      color: rgba(248,245,255,0.58);
+      margin-bottom: 3px;
+    }
+    .sideInfoCard strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.25;
+      color: var(--text);
+      word-break: break-word;
+    }
+    .arenaCenter {
+      position: relative;
+      min-height: 100%;
+      min-width: 0;
+    }
+
+    body.inRoom .membersList {
+      min-height: 0;
+      height: calc(100dvh - 154px);
+      margin: 0;
+    }
+
+    body.inRoom .arenaCenter {
+      min-height: 100%;
+      min-width: 0;
+    }
+    .membersList::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: min(44vw, 340px);
+      height: min(44vw, 340px);
+      max-width: 340px;
+      max-height: 340px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      border: 1px dashed rgba(255,255,255,0.12);
+      pointer-events: none;
+    }
+    .tableCenter {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: min(30vw, 210px);
+      min-height: 150px;
+      transform: translate(-50%, -50%);
+      padding: 18px 16px;
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.18);
+      box-shadow: inset 0 0 28px rgba(255,255,255,0.04);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      text-align: center;
+    }
+    .tableCenterTitle {
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      color: rgba(255,243,204,0.72);
+    }
+    .tableCenterOwner {
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--text);
+    }
+    .tableCenterSub {
+      font-size: 12px;
+      color: rgba(248,245,255,0.66);
+    }
+    .seatCard {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: min(19vw, 138px);
+      min-width: 98px;
+      transform: translate(calc(-50% + var(--seat-x)), calc(-50% + var(--seat-y)));
+      padding: 12px 12px 10px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(8,16,14,0.56);
+      box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+      text-align: center;
+    }
+    .seatCard.isTurn {
+      border-color: rgba(246,196,83,0.52);
+      box-shadow: 0 0 0 2px rgba(246,196,83,0.22), 0 10px 26px rgba(0,0,0,0.22);
+    }
+    .seatCard.isMe {
+      background: rgba(18,24,34,0.72);
+    }
+    .seatTop {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .seatName {
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+    .seatMeta {
+      font-size: 12px;
+      color: rgba(248,245,255,0.7);
+      line-height: 1.45;
+    }
+    .seatBadge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 52px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      color: #fff1b5;
+      border: 1px solid rgba(246,196,83,0.28);
+      background: rgba(246,196,83,0.18);
+    }
+    .seatBadge.subtle {
+      color: #d9fff1;
+      border-color: rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08);
+    }
+    .field { display: grid; gap: 8px; }
+    label { font-size: 14px; font-weight: 800; color: var(--accent-2); letter-spacing: 0.02em; }
+    input[type="text"] {
+      width: 100%;
+      height: 58px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.14);
+      padding: 0 16px;
+      font-size: 18px;
+      color: var(--text);
+      background: rgba(255,255,255,0.08);
+      outline: none;
+    }
+
+    .actions, .actionBar, .roomButtons, .choiceGroup {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button {
+      width: 100%;
+      height: 60px;
+      border: 0;
+      border-radius: 18px;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 0.03em;
+      color: #2d1800;
+      background: linear-gradient(145deg, var(--accent), var(--accent-2));
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .leaveButton, .settingsButton, .secondaryButton, .actionButton {
+      width: auto;
+      min-width: 92px;
+      height: 48px;
+      padding: 0 16px;
+      border-radius: 14px;
+    }
+    .leaveButton, .settingsButton, .secondaryButton {
+      color: var(--text);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.14);
+    }
+
+    .roomInfo, .statusGrid, .fieldMeta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .topInfoBar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .miniInfoStack {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      max-width: 100%;
+    }
+    .miniInfoCard {
+      min-width: 110px;
+      padding: 6px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.05);
+      font-size: 10px;
+      line-height: 1.25;
+      color: rgba(248,245,255,0.78);
+    }
+    .miniInfoCard span {
+      display: block;
+      font-size: 10px;
+      color: rgba(248,245,255,0.58);
+      margin-bottom: 2px;
+    }
+    .miniInfoCard strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.2;
+      word-break: break-word;
+      color: var(--text);
+    }
+
+    .roomInfoCard, .memberCard, .settingsPanel, .fieldPanel, .myHandSection, .settingItem {
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+    }
+    .settingItem {
+      position: relative;
+      cursor: pointer;
+      transition: background 0.18s ease, border-color 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
+    }
+    .settingItem:hover {
+      transform: translateY(-1px);
+    }
+    .settingItem.settingOff {
+      background: rgba(0,0,0,0.34);
+      border-color: rgba(255,255,255,0.08);
+    }
+    .settingItem.settingOn {
+      background: rgba(246,196,83,0.12);
+      border-color: rgba(246,196,83,0.28);
+    }
+    .settingItem.settingOff .settingName,
+    .settingItem.settingOff .settingSub {
+      opacity: 0.72;
+    }
+    .roomInfoCard, .fieldPanel, .settingsPanel, .myHandSection { padding: 14px 16px; }
+    .settingItem, .memberCard {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+    }
+    .roomInfoCard span, .fieldSub, .settingSub, .memberMeta, .notice, .rulesText {
+      margin: 0 0 4px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      color: rgba(248,245,255,0.66);
+    }
+    .compactLine {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .compactStatus {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+    .compactPill {
+      padding: 5px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      font-size: 10px;
+      line-height: 1.2;
+      color: rgba(248,245,255,0.82);
+      white-space: nowrap;
+    }
+    .compactPill strong {
+      color: var(--text);
+      font-size: 12px;
+    }
+    .notice {
+      margin-bottom: 8px;
+      padding: 13px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .fieldCards, .handList { display: flex; flex-wrap: wrap; gap: 8px; min-height: 60px; }
+    .handList {
+      max-height: 150px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .handActionRow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .fieldPanel {
+      padding: 10px 12px;
+    }
+    .fieldPanel .roomInfoCard {
+      padding: 10px 12px;
+    }
+    .fieldPanel .fieldTitle {
+      font-size: 17px;
+    }
+    .fieldPanel .roomMini {
+      margin-bottom: 2px;
+      font-size: 10px;
+    }
+    .myHandSection {
+      padding: 10px 12px;
+      flex-shrink: 0;
+    }
+
+    body.inRoom .myHandSection {
+      margin: 0;
+      padding: 8px 10px 10px;
+    }
+    .handTitle {
+      font-size: 18px;
+    }
+
+    body.inRoom .handHead {
+      margin-bottom: 6px;
+    }
+
+    body.inRoom .handList {
+      max-height: 96px;
+    }
+
+    body.inRoom .handActionRow {
+      margin-top: 6px;
+    }
+
+    body.inRoom .roomButtons {
+      margin-left: auto;
+    }
+
+    body.inRoom .leaveButton,
+    body.inRoom .settingsButton,
+    body.inRoom .actionButton {
+      height: 40px;
+      min-width: 84px;
+      border-radius: 12px;
+    }
+    .cardChip {
+      min-width: 56px;
+      height: 74px;
+      padding: 8px 6px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.92);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+      font-size: 20px;
+      font-weight: 900;
+      user-select: none;
+    }
+    .fieldCards .cardChip { min-width: 50px; height: 68px; font-size: 18px; }
+    .cardRed { color: #b81f37; }
+    .cardBlack { color: #1f2230; }
+    .cardSelectable { cursor: pointer; }
+    .cardSelected { outline: 3px solid rgba(246,196,83,0.95); transform: translateY(-3px); }
+    .handEmpty, .fieldEmpty {
+      width: 100%;
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      border-radius: 14px;
+      border: 1px dashed rgba(255,255,255,0.18);
+      color: rgba(248,245,255,0.58);
+      padding: 12px;
+    }
+
+    .badge {
+      flex-shrink: 0;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.08);
+      white-space: nowrap;
+    }
+    .badgeHost { color: #fff1b5; background: rgba(246,196,83,0.18); border-color: rgba(246,196,83,0.28); }
+    .badgeGuest { color: #d9fff1; }
+
+
+    .switch { position: relative; width: 56px; height: 32px; flex-shrink: 0; }
+    .switch input, .choiceOption input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+    .slider {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.14);
+    }
+    .slider::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.22);
+      transition: transform 0.2s ease;
+    }
+    .switch input:checked + .slider { background: rgba(246,196,83,0.3); border-color: rgba(246,196,83,0.45); }
+    .settingItem .switch {
+      pointer-events: none;
+    }
+    .switch input:checked + .slider::after { transform: translateX(24px); }
+    .switch input:disabled + .slider, .choiceOption input:disabled + .choicePill { opacity: 0.55; cursor: not-allowed; }
+
+    .choiceOption { position: relative; flex-shrink: 0; }
+    .choicePill {
+      min-width: 74px;
+      height: 40px;
+      padding: 0 16px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 900;
+    }
+    .choiceOption input:checked + .choicePill { color: #fff1b5; border-color: rgba(246,196,83,0.45); background: rgba(246,196,83,0.22); }
+
+    .guestLocked .roomInfo, .guestLocked .statusGrid, .guestLocked .membersList, .guestLocked .myHandSection, .guestLocked .fieldPanel {
+      pointer-events: none;
+      opacity: 0.58;
+      filter: saturate(0.75);
+    }
+
+    @media (max-width: 640px) {
+      .screen { padding: 14px; gap: 12px; }
+      .entryTopBar { width: 100%; }
+      .panel { padding: 28px 18px 22px; border-radius: 22px; }
+      .roomInfo, .statusGrid, .fieldMeta { grid-template-columns: 1fr; }
+      .roomButtons, .actionBar, .handActionRow { width: 100%; }
+      .leaveButton, .settingsButton, .actionButton { flex: 1 1 0; min-width: 0; height: 44px; }
+      input[type="text"], button { height: 56px; }
+      .settingItem, .memberCard { align-items: flex-start; }
+      .membersList {
+        min-height: 420px;
+        grid-template-columns: 1fr;
+        padding: 10px;
+      }
+      .membersList::before {
+        width: min(78vw, 240px);
+        height: min(78vw, 240px);
+      }
+      .sideInfoCol {
+        display: none;
+      }
+      .arenaCenter {
+        min-height: 400px;
+      }
+      body.inRoom .membersList {
+        height: calc(100dvh - 142px);
+        min-height: 0;
+      }
+      body.inRoom .arenaCenter {
+        min-height: 100%;
+      }
+      .tableCenter {
+        width: min(48vw, 170px);
+        min-height: 120px;
+        padding: 10px 8px;
+      }
+      .seatCard {
+        width: 92px;
+        min-width: 92px;
+        padding: 7px 5px;
+      }
+      .seatName { font-size: 11px; }
+      .seatMeta { font-size: 9px; }
+      .topInfoBar { margin-bottom: 4px; }
+      .miniInfoStack { max-width: 100%; gap: 6px; }
+      .compactLine {
+        flex-direction: row;
+        align-items: center;
+      }
+      .compactStatus {
+        gap: 6px;
+      }
+      .handList {
+        max-height: 132px;
+      }
+      body.inRoom .handList {
+        max-height: 74px;
+      }
+      body.inRoom .leaveButton,
+      body.inRoom .settingsButton,
+      body.inRoom .actionButton {
+        height: 38px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="screen">
+    <div class="entryTopBar">
+      <div class="loginInfoBar" id="loginInfoBar">
+        <img class="loginInfoPhoto" id="loginInfoPhoto" alt="" />
+        <div class="loginInfoText">
+          <div class="loginInfoName" id="loginInfoName">---</div>
+          <div class="loginInfoSub" id="loginInfoSub">Googleログインしてください</div>
+        </div>
+      </div>
+    </div>
+    <section class="panel" id="entryPanel" aria-label="代々大富豪 入室画面">
+      <div class="titleWrap">
+        <div class="crest">♠</div>
+        <h1>代々大富豪</h1>
+      </div>
+      <form class="form" id="entryForm">
+        <input id="playerName" name="playerName" type="hidden" maxlength="20" autocomplete="nickname" readonly />
+        <div class="field">
+          <label for="roomWord">合言葉</label>
+          <input id="roomWord" name="roomWord" type="text" maxlength="24" autocomplete="off" />
+        </div>
+        <div class="actions">
+          <button id="joinButton" type="submit" disabled>この部屋に入る</button>
+          <div class="notice hidden" id="entryMessage"></div>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel roomPanel hidden" id="roomPanel" aria-label="代々大富豪 部屋画面">
+      <div class="roomHead">
+        <div class="loginInfoBar" id="roomLoginInfoBar">
+          <img class="loginInfoPhoto" id="roomLoginInfoPhoto" alt="" />
+          <div class="loginInfoText">
+            <div class="loginInfoName" id="roomLoginInfoName">---</div>
+            <div class="loginInfoSub" id="roomLoginInfoSub">Googleログインしてください</div>
+          </div>
+        </div>
+        <div class="roomButtons">
+          <button class="settingsButton hidden" id="settingsButton" type="button">設定</button>
+          <button class="actionButton hidden" id="startGameButton" type="button">ゲーム開始</button>
+          <button class="leaveButton" id="leaveButton" type="button">退出</button>
+        </div>
+      </div>
+
+      <div class="topInfoBar">
+        <div class="miniInfoStack">
+          <div class="miniInfoCard"><span>合言葉</span><strong id="roomWordLabel">-</strong></div>
+          <div class="miniInfoCard"><span>参加人数</span><strong id="memberCount">0人</strong></div>
+        </div>
+      </div>
+
+      <div class="compactLine">
+        <div class="compactStatus">
+          <div class="compactPill">状態 <strong id="gamePhaseLabel">待機中</strong></div>
+          <div class="compactPill">手番 <strong id="turnInfoLabel">-</strong></div>
+        </div>
+      </div>
+
+      <div class="rulesText" id="rulesText">8切 / 革命 / 30秒</div>
+      <div class="notice hidden" id="roomMessage"></div>
+
+      <section class="fieldPanel" aria-label="ゲーム場面">
+        <div class="fieldHead">
+          <div>
+            <div class="roomMini">STATUS</div>
+            <h3 class="fieldTitle">進行</h3>
+          </div>
+          <div class="countdownBadge" id="countdownLabel">-</div>
+        </div>
+        <div class="fieldMeta">
+          <div class="roomInfoCard">
+            <span>効果 / 縛り</span>
+            <strong id="effectStatusLabel">通常</strong>
+            <div class="fieldSub" id="lockStatusLabel">縛りなし</div>
+          </div>
+          <div class="roomInfoCard">
+            <span>待機中メッセージ</span>
+            <div class="fieldSub" id="actionHintMirror">開始待ち</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="settingsPanel hidden" id="settingsPanel" aria-label="ゲーム設定">
+        <div class="settingsHead">
+          <div>
+            <div class="roomMini">GAME SETTINGS</div>
+            <h3 class="settingsTitle">ゲーム設定</h3>
+          </div>
+          <div class="settingsBadge">親だけ変更可</div>
+        </div>
+        <div class="settingsList">
+          <div class="settingItem" data-setting-target="eightCutToggle"><div><div class="settingName">8切</div><div class="settingSub">8を出した時に場を流す</div></div><label class="switch"><input id="eightCutToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="ninetyNineCarToggle"><div><div class="settingName">99車</div><div class="settingSub">9を2枚出した時に場を流す</div></div><label class="switch"><input id="ninetyNineCarToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="revolutionToggle"><div><div class="settingName">革命</div><div class="settingSub">4枚以上で強さを反転する</div></div><label class="switch"><input id="revolutionToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="stairsToggle"><div><div class="settingName">階段</div><div class="settingSub">同じマークの連番を出せる</div></div><label class="switch"><input id="stairsToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="stairsRevolutionToggle"><div><div class="settingName">階段革命</div><div class="settingSub">4枚以上の階段で強さを反転する</div></div><label class="switch"><input id="stairsRevolutionToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="lockToggle"><div><div class="settingName">ロック</div><div class="settingSub">同じマーク並びでスートを固定する</div></div><label class="switch"><input id="lockToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="numberLockToggle"><div><div class="settingName">数字ロック</div><div class="settingSub">同じ数字並びで数字条件を固定する</div></div><label class="switch"><input id="numberLockToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="skipFiveToggle"><div><div class="settingName">5飛ばし</div><div class="settingSub">5を含むと次の人を飛ばす</div></div><label class="switch"><input id="skipFiveToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="tenDumpToggle"><div><div class="settingName">10捨て</div><div class="settingSub">10を出した枚数ぶん追加で捨てる</div></div><label class="switch"><input id="tenDumpToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="jackBackToggle"><div><div class="settingName">11バック</div><div class="settingSub">Jを含むと場が流れるまで反転する</div></div><label class="switch"><input id="jackBackToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="spadeThreeReturnToggle"><div><div class="settingName">スペ3返し</div><div class="settingSub">ジョーカー単体にスペード3で返せる</div></div><label class="switch"><input id="spadeThreeReturnToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="sixReverseToggle"><div><div class="settingName">6リバース</div><div class="settingSub">6を含むと順番を反転する</div></div><label class="switch"><input id="sixReverseToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="sevenPassToggle"><div><div class="settingName">7渡し</div><div class="settingSub">7を含むと次の人に手札を渡す</div></div><label class="switch"><input id="sevenPassToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="miyakoOchiToggle"><div><div class="settingName">都落ち</div><div class="settingSub">前回1位が今回最初に上がれないと都落ち扱い</div></div><label class="switch"><input id="miyakoOchiToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem" data-setting-target="doubleDeckToggle"><div><div class="settingName">トランプ2セット 104枚</div><div class="settingSub">2セットで山札を作る</div></div><label class="switch"><input id="doubleDeckToggle" type="checkbox" /><span class="slider"></span></label></div>
+          <div class="settingItem"><div><div class="settingName">CPU人数</div><div class="settingSub">親が開始前にCPUを増減できます</div></div><div class="choiceGroup"><button class="secondaryButton" id="cpuRemoveButton" type="button">CPU−</button><div class="choicePill" id="cpuCountLabel">0</div><button class="secondaryButton" id="cpuAddButton" type="button">CPU＋</button></div></div>
+          <div class="settingItem"><div><div class="settingName">持ち時間</div><div class="settingSub">時間切れなら自動で処理する</div></div><div class="choiceGroup"><label class="choiceOption"><input id="turnTime30" name="turnTime" type="radio" value="30" /><span class="choicePill">30秒</span></label><label class="choiceOption"><input id="turnTime15" name="turnTime" type="radio" value="15" /><span class="choicePill">15秒</span></label></div></div>
+        </div>
+      </section>
+
+      <div class="membersList" id="membersList">
+        <div class="tableCenter">
+          <div class="tableCenterTitle">TABLE CENTER</div>
+          <div class="tableCenterOwner" id="fieldOwnerLabel">場は空です</div>
+          <div class="fieldCards" id="lastPlayList"><div class="fieldEmpty">まだ場札はありません</div></div>
+          <div class="tableCenterSub" id="actionHintLabel">開始待ち</div>
+        </div>
+        <div class="fieldEmpty">まだ参加者はいません</div>
+      </div>
+
+
+      <section class="myHandSection" aria-label="あなたの手札">
+        <div class="handHead"><div><div class="roomMini">YOUR HAND</div><h3 class="handTitle">あなたの手札</h3></div><div class="handCount" id="myHandCount">0枚</div></div>
+        <div class="handList" id="myHandList"><div class="handEmpty">ゲーム開始で手札が配られます</div></div>
+        <div class="handActionRow">
+          <button class="actionButton" id="playButton" type="button">出す</button>
+          <button class="actionButton secondaryButton" id="passButton" type="button">パス</button>
+          <button class="actionButton hidden" id="transferButton" type="button">渡す</button>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script type="module" src="./game.js"></script>
+</body>
+</html>

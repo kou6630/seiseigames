@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeiSeigames</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --bg-1: #0f172a;
+      --bg-2: #1e293b;
+      --panel: rgba(15, 23, 42, 0.72);
+      --panel-border: rgba(255, 255, 255, 0.12);
+      --text: #f8fafc;
+      --sub: #cbd5e1;
+      --accent: #38bdf8;
+      --accent-2: #818cf8;
+      --danger: #ef4444;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 32%),
+        radial-gradient(circle at top right, rgba(129, 140, 248, 0.22), transparent 28%),
+        linear-gradient(160deg, var(--bg-1), var(--bg-2));
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 1100px;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 24px;
+      opacity: 0;
+      transform: translateY(18px);
+      animation: heroReveal 1.2s ease forwards;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      padding: 8px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--sub);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+      backdrop-filter: blur(8px);
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(36px, 6vw, 68px);
+      line-height: 1.05;
+      letter-spacing: 0.01em;
+      text-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    .hero .accent {
+      background: linear-gradient(90deg, #7dd3fc, #a5b4fc, #67e8f9);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero p {
+      margin: 16px auto 0;
+      max-width: 680px;
+      color: var(--sub);
+      font-size: clamp(15px, 2.2vw, 18px);
+      line-height: 1.75;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      overflow: hidden;
+      animation: fadeUp 0.8s ease;
+    }
+
+    .card-inner {
+      padding: 28px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--sub);
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #f59e0b;
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.55);
+    }
+
+    .dot.ok {
+      background: #22c55e;
+      box-shadow: 0 0 14px rgba(34, 197, 94, 0.55);
+    }
+
+    .auth-section {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 20px;
+    }
+
+    .panel {
+      border-radius: 22px;
+      padding: 22px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .panel h2,
+    .panel h3 {
+      margin: 0 0 12px;
+    }
+
+    .panel p {
+      margin: 0;
+      color: var(--sub);
+      line-height: 1.8;
+    }
+
+    .user-box {
+      display: none;
+      gap: 16px;
+      align-items: center;
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .user-box.show {
+      display: flex;
+    }
+
+    .avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .user-meta {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .user-name {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+
+    .user-mail {
+      color: var(--sub);
+      font-size: 14px;
+      word-break: break-all;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      cursor: pointer;
+      border-radius: 16px;
+      padding: 14px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      transition: transform 0.18s ease, opacity 0.18s ease, background 0.18s ease;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    button:disabled { opacity: 0.6; cursor: wait; }
+
+    .primary {
+      color: #08111f;
+      background: linear-gradient(90deg, #7dd3fc, #a5b4fc);
+    }
+
+    .secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .danger {
+      color: #fff;
+      background: rgba(239, 68, 68, 0.9);
+    }
+
+    .side-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      height: 100%;
+    }
+
+    .menu-card {
+      cursor: pointer;
+      border-radius: 24px;
+      padding: 20px;
+      background: linear-gradient(135deg, rgba(125, 211, 252, 0.08), rgba(165, 180, 252, 0.08));
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      min-height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      transition: opacity 0.2s ease, filter 0.2s ease, transform 0.2s ease;
+    }
+
+    .menu-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .menu-card.locked {
+      opacity: 0.4;
+      filter: grayscale(0.2) brightness(0.72);
+      pointer-events: none;
+    }
+
+    .menu-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 42%);
+      pointer-events: none;
+    }
+
+    .menu-card h3 {
+      margin: 0;
+      font-size: clamp(28px, 3.2vw, 38px);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1.2;
+      background: linear-gradient(90deg, #e0f2fe, #c4b5fd, #a5f3fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+      position: relative;
+      z-index: 1;
+    }
+
+    
+    .game-select-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 30%),
+        radial-gradient(circle at top right, rgba(129, 140, 248, 0.16), transparent 28%),
+        linear-gradient(160deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.98));
+      overflow: auto;
+    }
+
+    .game-select-screen.show {
+      display: block;
+      animation: fadeUp 0.25s ease;
+    }
+
+    .game-select-wrap {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .game-select-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .game-select-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      flex-wrap: wrap;
+    }
+
+    .game-select-login {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .game-select-login-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.08);
+      flex-shrink: 0;
+    }
+
+    .game-select-login-meta {
+      min-width: 0;
+    }
+
+    .game-select-login-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .game-select-login-sub {
+      margin-top: 2px;
+      font-size: 13px;
+      color: var(--sub);
+      word-break: break-all;
+    }
+
+    .game-select-nav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .game-select-nav-item {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 0 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .game-select-nav-item.button-like {
+      appearance: none;
+      cursor: pointer;
+    }
+
+    .nickname-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(2, 6, 23, 0.76);
+      backdrop-filter: blur(8px);
+    }
+
+    .nickname-modal.show {
+      display: flex;
+    }
+
+    .nickname-dialog {
+      width: 100%;
+      max-width: 460px;
+      padding: 24px;
+      border-radius: 24px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: var(--shadow);
+    }
+
+    .nickname-dialog h3 {
+      margin: 0 0 12px;
+      font-size: 24px;
+    }
+
+    .nickname-dialog p {
+      margin: 0 0 16px;
+      color: var(--sub);
+      line-height: 1.7;
+    }
+
+    .nickname-input {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      font-size: 16px;
+      outline: none;
+    }
+
+    .nickname-input::placeholder {
+      color: rgba(203, 213, 225, 0.65);
+    }
+
+    .nickname-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .nickname-error {
+      min-height: 20px;
+      margin-top: 10px;
+      color: #fca5a5;
+      font-size: 13px;
+    }
+
+    .game-select-title {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 54px);
+      line-height: 1.05;
+      background: linear-gradient(90deg, #e0f2fe, #c4b5fd, #a5f3fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+        .game-select-board {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      padding: 24px;
+    }
+
+    .game-select-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .game-select-item {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 150px;
+      padding: 18px;
+      border-radius: 24px;
+      text-decoration: none;
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(125, 211, 252, 0.1), rgba(165, 180, 252, 0.1));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      transition: transform 0.18s ease, border-color 0.18s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .game-select-item:hover {
+      transform: translateY(-3px);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .game-select-item::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.14), transparent 42%);
+      pointer-events: none;
+    }
+
+    .game-select-name {
+      position: relative;
+      z-index: 1;
+      margin: auto 0;
+      text-align: center;
+      font-size: clamp(22px, 2.2vw, 30px);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: 0.04em;
+      background: linear-gradient(90deg, #f8fafc, #c4b5fd, #a5f3fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .game-select-open {
+      position: relative;
+      z-index: 1;
+      align-self: flex-end;
+      color: var(--sub);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .message {
+      margin-top: 18px;
+      min-height: 24px;
+      color: #fde68a;
+      font-size: 14px;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes heroReveal {
+      0% {
+        opacity: 0;
+        transform: translateY(18px) scale(0.985);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @media (max-width: 860px) {
+      .auth-section {
+        grid-template-columns: 1fr;
+      }
+
+      .game-select-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card-inner {
+        padding: 20px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .game-select-list {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">      <h1><span class="accent">SeiSeigames</span>へようこそ。</h1>
+    </section>
+
+    <section class="card">
+      <div class="card-inner">
+        <div class="status-row">
+          <div class="status-pill" id="statusPill">
+            <span class="dot" id="statusDot"></span>
+            <span id="statusText">ログイン状態を確認しています</span>
+          </div>
+        </div>
+
+        <div class="auth-section">
+          <div class="panel">
+
+            <div class="user-box" id="userBox">
+              <img id="userPhoto" class="avatar" alt="avatar" src="" />
+              <div class="user-meta">
+                <div class="user-name" id="userName">---</div>
+                <div class="user-mail" id="userEmail">---</div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button id="loginBtn" class="primary">Googleでログイン</button>
+              <button id="logoutBtn" class="danger" style="display:none;">ログアウト</button>
+            </div>
+
+            <div class="message" id="message"></div>
+          </div>
+
+          <div class="panel">
+            <div class="side-menu">
+              <div class="menu-card" id="gameSelectCard">
+                <h3>ゲーム選択</h3>
+              </div>
+              <div class="menu-card" id="avatarGachaCard">
+                <h3>アバターガチャ</h3>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <section class="game-select-screen" id="gameSelectScreen">
+    <div class="game-select-wrap">
+      <div class="game-select-topbar">
+        <div class="game-select-login">
+          <div class="game-select-login-avatar" id="gameSelectUserPhoto"></div>
+          <div class="game-select-login-meta">
+            <div id="gameSelectUserName" class="game-select-login-name">---</div>
+            <div id="gameSelectUserSub" class="game-select-login-sub">コイン: 0</div>
+          </div>
+        </div>
+        <div class="game-select-nav">
+          <div class="game-select-nav-item">設定</div>
+          <button type="button" class="game-select-nav-item button-like" id="gameSelectHomeBtn">ホーム</button>
+        </div>
+      </div>
+      <div class="game-select-header">
+        <h2 class="game-select-title">ゲーム選択</h2>      </div>
+      <div class="game-select-board">
+        <div class="game-select-list">
+          <a class="game-select-item" href="./代々大富豪/index.html">
+            <div class="game-select-name">代々大富豪</div>
+            <div class="game-select-open">OPEN</div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="nickname-modal" id="nicknameModal">
+    <div class="nickname-dialog">
+      <h3>ニックネーム登録</h3>
+      <p>最初に表示する名前を登録してください。</p>
+      <input id="nicknameInput" class="nickname-input" type="text" maxlength="20" placeholder="ニックネームを入力" />
+      <div id="nicknameError" class="nickname-error"></div>
+      <div class="nickname-actions">
+        <button type="button" class="primary" id="nicknameSaveBtn">登録する</button>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="./selectgame.js"></script>
+</body>
+</html>
