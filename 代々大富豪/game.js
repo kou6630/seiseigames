@@ -21,6 +21,7 @@ import {
   getTradePairForPlayer,
   getTradeRoleMap,
   getTradeOrderFromLastResult,
+  getStartPlayerIdFromLastResult,
   getStrongestCardIds,
   getWeakestCardIds,
   createMutatePlay,
@@ -589,11 +590,6 @@ function applySettingsInputs() {
   if (cpuCountLabel) cpuCountLabel.textContent = String(currentSettings.cpuCount || 0);
 }
 
-function getStartPlayerIdFromLastResult(lastResult, members) {
-  const order = getTradeOrderFromLastResult(lastResult, members);
-  return order.length ? order[order.length - 1] : "";
-}
-
 function getMemberName(id, list) {
   const source = Array.isArray(list) ? list : currentMembers;
   const found = source.find(function(member) { return member.id === id; });
@@ -809,20 +805,28 @@ async function startGame() {
     if (members.length < 2) throw new Error("2人以上で開始できます");
     if (getHostPlayerId(roomData.members) !== playerId) throw new Error("親だけが開始できます");
     if (game.phase === "playing" || game.phase === "trading") throw new Error("すでにゲーム中です");
-    const turnOrder = members.map(function(member) { return member.id; });
-    const hands = {};
-    turnOrder.forEach(function(id) { hands[id] = []; });
-    shuffleDeck(buildDeck(settings.doubleDeckEnabled)).forEach(function(card, index) {
-      hands[turnOrder[index % turnOrder.length]].push(card);
-    });
-    turnOrder.forEach(function(id) { hands[id] = sortHandCards(hands[id]); });
-
+    let turnOrder = members.map(function(member) { return member.id; });
     const lastResult = roomData.lastResult && Array.isArray(roomData.lastResult.finishOrder) ? roomData.lastResult : null;
     const count = members.length;
     let phase = "playing";
     let tradeState = null;
     let lastActionText = "ゲーム開始";
     let firstTurnPlayerId = turnOrder[0] || "";
+
+    if (lastResult && lastResult.finishOrder.length === count && count >= 4) {
+      firstTurnPlayerId = getStartPlayerIdFromLastResult(lastResult, members) || firstTurnPlayerId;
+      const startIndex = turnOrder.indexOf(firstTurnPlayerId);
+      if (startIndex > 0) {
+        turnOrder = turnOrder.slice(startIndex).concat(turnOrder.slice(0, startIndex));
+      }
+    }
+
+    const hands = {};
+    turnOrder.forEach(function(id) { hands[id] = []; });
+    shuffleDeck(buildDeck(settings.doubleDeckEnabled)).forEach(function(card, index) {
+      hands[turnOrder[index % turnOrder.length]].push(card);
+    });
+    turnOrder.forEach(function(id) { hands[id] = sortHandCards(hands[id]); });
 
     if (lastResult && lastResult.finishOrder.length === count && count >= 4) {
       const order = getTradeOrderFromLastResult(lastResult, members);
@@ -851,8 +855,6 @@ async function startGame() {
         lastActionText = lastResult && lastResult.miyakoOchiPlayerId
           ? getMemberName(lastResult.miyakoOchiPlayerId, members) + " が都落ち / カード交換中"
           : "カード交換中";
-      } else {
-        firstTurnPlayerId = getStartPlayerIdFromLastResult(lastResult, members) || firstTurnPlayerId;
       }
     }
 

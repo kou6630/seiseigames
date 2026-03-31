@@ -765,11 +765,11 @@ export function createMutatePlay(deps) {
         game.hands[actorId] = sortHandCards(removeCardsByIds(fromHand, safeCardIds));
         game.pendingSevenPass = null;
         let miyakoDroppedPlayerId = "";
-        const foulFinish = !game.hands[actorId].length && isForbiddenAgariCards(giveCards, getEffectiveRevolution(game), settings.foulAgariEnabled);
+        const foulFinish = false;
         if (!game.hands[actorId].length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings, foulFinish);
         const lastResult = maybeFinishGame(roomData, game, nowMs);
         if (lastResult) {
-          game.lastActionText = getMemberName(actorId, members) + (foulFinish ? " が10捨てを完了しました / 反則上がり" : " が10捨てを完了して上がりました") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
+          game.lastActionText = getMemberName(actorId, members) + " が10捨てを完了して上がりました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
           game.ruleEffectState = null;
           roomData.lastResult = lastResult;
           roomData.gameData = game;
@@ -808,11 +808,11 @@ export function createMutatePlay(deps) {
       } : null;
       game.pendingSevenPass = null;
       let miyakoDroppedPlayerId = "";
-      const foulFinish = !game.hands[actorId].length && isForbiddenAgariCards(giveCards, getEffectiveRevolution(game), settings.foulAgariEnabled);
+      const foulFinish = false;
       if (!game.hands[actorId].length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings, foulFinish);
       const lastResult = maybeFinishGame(roomData, game, nowMs);
       if (lastResult) {
-        game.lastActionText = getMemberName(actorId, members) + (foulFinish ? " が渡し終えました / 反則上がり" : " が渡し終えて上がりました") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
+        game.lastActionText = getMemberName(actorId, members) + " が渡し終えて上がりました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
         game.ruleEffectState = null;
         roomData.lastResult = lastResult;
         roomData.gameData = game;
