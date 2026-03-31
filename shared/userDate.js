@@ -3,7 +3,7 @@ import {
   getCurrentUser,
 } from "./firebase.js";
 import {
-  getFirestore,
+  initializeFirestore,
   doc,
   getDoc,
   setDoc,
@@ -11,11 +11,15 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
-const db = getFirestore();
+const db = initializeFirestore(auth.app, {
+  experimentalForceLongPolling: true,
+  useFetchStreams: false,
+});
 const USERS_COLLECTION = "users";
 const DEFAULT_COIN = 0;
 const DEFAULT_AVATAR = "default";
 const DEFAULT_NICKNAME = "";
+const ADMIN_EMAILS = ["takoponnsama6630@gmail.com"];
 
 function buildDefaultUserData(user) {
   return {
@@ -28,6 +32,7 @@ function buildDefaultUserData(user) {
     nickname: DEFAULT_NICKNAME,
     selectedAvatar: DEFAULT_AVATAR,
     ownedAvatars: [DEFAULT_AVATAR],
+    isAdmin: ADMIN_EMAILS.includes(String(user.email || "").toLowerCase()),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -52,6 +57,7 @@ function normalizeUserData(uid, data = {}) {
     nickname: typeof data.nickname === "string" ? data.nickname : DEFAULT_NICKNAME,
     selectedAvatar,
     ownedAvatars,
+    isAdmin: Boolean(data.isAdmin),
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
   };
@@ -65,7 +71,7 @@ function requireUser(user = getCurrentUser()) {
 }
 
 function getUserRef(uid) {
-  return doc(getFirestore(auth.app), USERS_COLLECTION, uid);
+  return doc(db, USERS_COLLECTION, uid);
 }
 
 export async function ensureUserData(user = getCurrentUser()) {
@@ -91,6 +97,9 @@ export async function ensureUserData(user = getCurrentUser()) {
     photoURL: currentUser.photoURL || existing.photoURL || "",
     selectedAvatarImage: existing.selectedAvatarImage || currentUser.photoURL || existing.photoURL || "",
     nickname: typeof existing.nickname === "string" ? existing.nickname : DEFAULT_NICKNAME,
+    isAdmin: typeof existing.isAdmin === "boolean"
+      ? existing.isAdmin
+      : ADMIN_EMAILS.includes(String(currentUser.email || "").toLowerCase()),
     updatedAt: serverTimestamp(),
   };
 
@@ -100,6 +109,7 @@ export async function ensureUserData(user = getCurrentUser()) {
     photoURL: merged.photoURL,
     selectedAvatarImage: merged.selectedAvatarImage,
     nickname: merged.nickname,
+    isAdmin: merged.isAdmin,
     updatedAt: merged.updatedAt,
   });
 
@@ -131,6 +141,8 @@ export async function updateUserData(partialData = {}, user = getCurrentUser()) 
   if (typeof safeData.nickname === "string") {
     safeData.nickname = safeData.nickname.trim().replace(/\s+/g, " ").slice(0, 20);
   }
+
+  delete safeData.isAdmin;
 
   if (Array.isArray(safeData.ownedAvatars) && safeData.ownedAvatars.length === 0) {
     safeData.ownedAvatars = [DEFAULT_AVATAR];
@@ -199,6 +211,93 @@ export async function selectAvatar(avatarId, user = getCurrentUser()) {
   }
 
   return updateUserData({ selectedAvatar: nextAvatarId }, currentUser);
+}
+
+export async function getAllUsersData(user = getCurrentUser()) {
+  const currentUser = requireUser(user);
+  const currentData = await getUserData(currentUser);
+
+  if (!currentData.isAdmin) {
+    throw new Error("権限がありません");
+  }
+
+  try {
+    const { collection, getDocs, query, orderBy } = await import("https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js");
+    const snapshot = await getDocs(query(collection(db, USERS_COLLECTION), orderBy("createdAt", "desc")));
+    return snapshot.docs.map((item) => normalizeUserData(item.id, item.data() || {}));
+  } catch (error) {
+    console.error(error);
+    return [currentData];
+  }
+}
+
+export async function addUserCoinByUid(targetUid, amount, user = getCurrentUser()) {
+  const currentUser = requireUser(user);
+  const currentData = await getUserData(currentUser);
+
+  if (!currentData.isAdmin) {
+    throw new Error("権限がありません");
+  }
+
+  const uid = String(targetUid || "").trim();
+  if (!uid) {
+    throw new Error("対象ユーザーが必要です");
+  }
+
+  const targetRef = getUserRef(uid);
+  const snapshot = await getDoc(targetRef);
+
+  if (!snapshot.exists()) {
+    throw new Error("対象ユーザーが見つかりません");
+  }
+
+  const targetData = normalizeUserData(uid, snapshot.data() || {});
+  const nextCoin = Math.max(0, (targetData.coin || 0) + Number(amount || 0));
+
+  await updateDoc(targetRef, {
+    coin: nextCoin,
+    updatedAt: serverTimestamp(),
+  });
+
+  return normalizeUserData(uid, {
+    ...targetData,
+    coin: nextCoin,
+  });
+}
+
+export async function useUserCoinByUid(targetUid, amount, user = getCurrentUser()) {
+  const currentUser = requireUser(user);
+  const currentData = await getUserData(currentUser);
+
+  if (!currentData.isAdmin) {
+    throw new Error("権限がありません");
+  }
+
+  const uid = String(targetUid || "").trim();
+  if (!uid) {
+    throw new Error("対象ユーザーが必要です");
+  }
+
+  const cost = Math.max(0, Number(amount || 0));
+  const targetRef = getUserRef(uid);
+  const snapshot = await getDoc(targetRef);
+
+  if (!snapshot.exists()) {
+    throw new Error("対象ユーザーが見つかりません");
+  }
+
+  const targetData = normalizeUserData(uid, snapshot.data() || {});
+  const nextCoin = Math.max(0, (targetData.coin || 0) - cost);
+
+  await updateDoc(targetRef, {
+    coin: nextCoin,
+    updatedAt: serverTimestamp(),
+  });
+
+  return normalizeUserData(uid, {
+    ...targetData,
+    coin: nextCoin,
+  });
 }
 
 export { db, USERS_COLLECTION, DEFAULT_COIN, DEFAULT_AVATAR, DEFAULT_NICKNAME };

@@ -405,6 +405,204 @@
       cursor: pointer;
     }
 
+    .admin-entry {
+      display: none;
+    }
+
+    .admin-entry.show {
+      display: inline-flex;
+    }
+
+    .admin-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: none;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 30%),
+        radial-gradient(circle at top right, rgba(129, 140, 248, 0.16), transparent 28%),
+        linear-gradient(160deg, rgba(2, 6, 23, 0.97), rgba(15, 23, 42, 0.99));
+      overflow: auto;
+    }
+
+    .admin-screen.show {
+      display: block;
+      animation: fadeUp 0.25s ease;
+    }
+
+    .admin-wrap {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .admin-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      flex-wrap: wrap;
+    }
+
+    .admin-title {
+      margin: 0;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.05;
+      background: linear-gradient(90deg, #e0f2fe, #c4b5fd, #a5f3fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .admin-board {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      padding: 24px;
+    }
+
+    .admin-tools {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      gap: 18px;
+    }
+
+    .admin-panel {
+      border-radius: 22px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .admin-panel h3 {
+      margin: 0 0 12px;
+      font-size: 22px;
+    }
+
+    .admin-note {
+      margin: 0 0 14px;
+      color: var(--sub);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .admin-search {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+    }
+
+    .admin-search::placeholder,
+    .admin-coin-input::placeholder {
+      color: rgba(203, 213, 225, 0.65);
+    }
+
+    .admin-user-list {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 430px;
+      overflow: auto;
+    }
+
+    .admin-user-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .admin-user-main {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .admin-user-name {
+      font-size: 16px;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .admin-user-sub {
+      margin-top: 4px;
+      color: var(--sub);
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    .admin-user-coin {
+      flex-shrink: 0;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fde68a;
+      white-space: nowrap;
+    }
+
+    .admin-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .admin-selected {
+      min-height: 52px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--sub);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .admin-coin-input {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+    }
+
+    .admin-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .admin-status {
+      min-height: 24px;
+      color: #fde68a;
+      font-size: 14px;
+    }
+
+    .admin-empty {
+      color: var(--sub);
+      line-height: 1.8;
+      font-size: 15px;
+    }
+
     .nickname-modal {
       position: fixed;
       inset: 0;
@@ -592,6 +790,10 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
+      .admin-tools {
+        grid-template-columns: 1fr;
+      }
+
       .card-inner {
         padding: 20px;
       }
@@ -664,6 +866,7 @@
         </div>
         <div class="game-select-nav">
           <div class="game-select-nav-item">設定</div>
+          <button type="button" class="game-select-nav-item button-like admin-entry" id="adminEntryBtn">運営</button>
           <button type="button" class="game-select-nav-item button-like" id="gameSelectHomeBtn">ホーム</button>
         </div>
       </div>
@@ -675,6 +878,40 @@
             <div class="game-select-name">代々大富豪</div>
             <div class="game-select-open">OPEN</div>
           </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="admin-screen" id="adminScreen">
+    <div class="admin-wrap">
+      <div class="admin-header">
+        <h2 class="admin-title">運営ページ</h2>
+        <button type="button" class="game-select-nav-item button-like" id="adminCloseBtn">閉じる</button>
+      </div>
+      <div class="admin-board">
+        <div class="admin-tools">
+          <div class="admin-panel">
+            <h3>ユーザー一覧</h3>
+            <p class="admin-note">ログインしたことがある人をここで確認する想定です。</p>
+            <input id="adminSearchInput" class="admin-search" type="text" placeholder="名前やメールで探す" />
+            <div class="admin-user-list" id="adminUserList">
+              <div class="admin-empty">まだ一覧は読み込まれていません。</div>
+            </div>
+          </div>
+          <div class="admin-panel">
+            <h3>コイン対応</h3>
+            <p class="admin-note">選んだ相手に対して付与や没収を行う想定です。</p>
+            <div class="admin-form">
+              <div class="admin-selected" id="adminSelectedUser">対象ユーザーを選んでください。</div>
+              <input id="adminCoinInput" class="admin-coin-input" type="number" inputmode="numeric" min="1" step="1" placeholder="コイン数を入力" />
+              <div class="admin-actions">
+                <button type="button" class="primary" id="adminAddCoinBtn">コイン付与</button>
+                <button type="button" class="danger" id="adminRemoveCoinBtn">コイン没収</button>
+              </div>
+              <div class="admin-status" id="adminStatus"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

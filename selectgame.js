@@ -25,9 +25,25 @@ const nicknameModal = document.getElementById("nicknameModal");
 const nicknameInput = document.getElementById("nicknameInput");
 const nicknameError = document.getElementById("nicknameError");
 const nicknameSaveBtn = document.getElementById("nicknameSaveBtn");
+const adminEntryBtn = document.getElementById("adminEntryBtn");
+const adminScreen = document.getElementById("adminScreen");
+const adminCloseBtn = document.getElementById("adminCloseBtn");
+const adminSearchInput = document.getElementById("adminSearchInput");
+const adminUserList = document.getElementById("adminUserList");
+const adminSelectedUser = document.getElementById("adminSelectedUser");
+const adminCoinInput = document.getElementById("adminCoinInput");
+const adminAddCoinBtn = document.getElementById("adminAddCoinBtn");
+const adminRemoveCoinBtn = document.getElementById("adminRemoveCoinBtn");
+const adminStatus = document.getElementById("adminStatus");
 
 let currentUser = null;
 let currentProfile = null;
+let isAdminUser = false;
+let adminUsers = [];
+let adminSelectedUid = "";
+let stopOnlineUsersSubscription = null;
+
+const ADMIN_EMAILS = ["takoponnsama6630@gmail.com"];
 
 function setMessage(text = "") {
   if (message) {
@@ -37,6 +53,162 @@ function setMessage(text = "") {
 
 function sanitizeNickname(value = "") {
   return String(value).trim().replace(/\s+/g, " ").slice(0, 20);
+}
+
+function getFallbackNickname(user) {
+  const fromName = sanitizeNickname(user && user.displayName ? user.displayName : "");
+  if (fromName) return fromName;
+
+  const email = String(user && user.email ? user.email : "");
+  const fromEmail = sanitizeNickname(email.split("@")[0] || "");
+  if (fromEmail) return fromEmail;
+
+  return "ゲスト";
+}
+
+function isAdminAccount(user) {
+  if (!user) return false;
+  return ADMIN_EMAILS.includes(String(user.email || "").toLowerCase());
+}
+
+function setAdminEntryVisible(visible) {
+  if (!adminEntryBtn) return;
+  adminEntryBtn.classList.toggle("show", Boolean(visible));
+}
+
+function setAdminStatus(text = "") {
+  if (adminStatus) {
+    adminStatus.textContent = text;
+  }
+}
+
+function openAdminScreen() {
+  if (adminScreen) {
+    adminScreen.classList.add("show");
+  }
+}
+
+function closeAdminScreen() {
+  if (stopOnlineUsersSubscription) {
+    stopOnlineUsersSubscription();
+    stopOnlineUsersSubscription = null;
+  }
+  if (adminScreen) {
+    adminScreen.classList.remove("show");
+  }
+}
+
+function resetAdminView() {
+  adminUsers = [];
+  adminSelectedUid = "";
+  if (adminSearchInput) adminSearchInput.value = "";
+  if (adminCoinInput) adminCoinInput.value = "";
+  if (adminSelectedUser) adminSelectedUser.textContent = "対象ユーザーを選んでください。";
+  if (adminUserList) adminUserList.innerHTML = '<div class="admin-empty">読み込み前です。</div>';
+  setAdminStatus("");
+}
+
+function renderAdminUsers(keyword = "") {
+  if (!adminUserList) return;
+
+  const search = String(keyword || "").trim().toLowerCase();
+  const filtered = adminUsers.filter((user) => {
+    if (!search) return true;
+    const text = `${user.nickname || ""} ${user.name || ""} ${user.email || ""}`.toLowerCase();
+    return text.includes(search);
+  });
+
+  if (!filtered.length) {
+    adminUserList.innerHTML = '<div class="admin-empty">該当ユーザーがいません。</div>';
+    return;
+  }
+
+  adminUserList.innerHTML = filtered.map((user) => {
+    const label = user.nickname || user.name || "名前なし";
+    const email = user.email || "オンライン中";
+    const coin = Number.isFinite(Number(user.coin)) ? Number(user.coin) : null;
+    return `
+      <button type="button" class="admin-user-item" data-admin-user="${user.uid}">
+        <div class="admin-user-main">
+          <div class="admin-user-name">${label}</div>
+          <div class="admin-user-sub">${email}</div>
+        </div>
+        <div class="admin-user-coin">${coin === null ? "オンライン中" : `コイン: ${coin}`}</div>
+      </button>
+    `;
+  }).join("");
+
+  adminUserList.querySelectorAll("[data-admin-user]").forEach((button) => {
+    button.addEventListener("click", () => {
+      adminSelectedUid = button.getAttribute("data-admin-user") || "";
+      const target = adminUsers.find((user) => user.uid === adminSelectedUid);
+      if (!target) return;
+      if (adminSelectedUser) {
+        adminSelectedUser.textContent = `${target.nickname || target.name || "名前なし"} / ${target.email || "オンライン中"} / ${Number.isFinite(Number(target.coin)) ? `コイン: ${Number(target.coin)}` : "オンライン中"}`;
+      }
+      setAdminStatus("");
+    });
+  });
+}
+
+async function loadAdminUsers() {
+  if (!isAdminUser) return;
+  if (stopOnlineUsersSubscription) {
+    stopOnlineUsersSubscription();
+    stopOnlineUsersSubscription = null;
+  }
+  adminUsers = [];
+  if (adminUserList) {
+    adminUserList.innerHTML = '<div class="admin-empty">通信を使わない設定のため、オンライン一覧は停止中です。</div>';
+  }
+  setAdminStatus("一覧取得は停止中です。");
+}
+
+async function applyAdminCoin(mode) {
+  if (!isAdminUser) return;
+  if (!adminSelectedUid) {
+    setAdminStatus("対象ユーザーを選んでください。");
+    return;
+  }
+  const amount = Math.max(0, Math.floor(Number(adminCoinInput ? adminCoinInput.value : 0)));
+  if (!amount) {
+    setAdminStatus("コイン数を入力してください。");
+    return;
+  }
+  setAdminStatus("通信を止めているため、コイン操作は停止中です。");
+}
+
+function getProfileStorageKey(user) {
+  return `seiseigames_profile_${user.uid}`;
+}
+
+function loadStoredProfile(user) {
+  try {
+    const raw = localStorage.getItem(getProfileStorageKey(user));
+    if (!raw) {
+      return { nickname: "", coin: 0, isAdmin: isAdminAccount(user) };
+    }
+    const data = JSON.parse(raw);
+    return {
+      nickname: typeof data.nickname === "string" ? data.nickname : "",
+      coin: Number.isFinite(data.coin) ? data.coin : 0,
+      isAdmin: typeof data.isAdmin === "boolean" ? data.isAdmin : isAdminAccount(user),
+    };
+  } catch (error) {
+    console.error(error);
+    return { nickname: "", coin: 0, isAdmin: isAdminAccount(user) };
+  }
+}
+
+function saveStoredProfile(user, partialData = {}) {
+  const current = loadStoredProfile(user);
+  const next = {
+    ...current,
+    ...partialData,
+    isAdmin: isAdminAccount(user),
+  };
+  localStorage.setItem(getProfileStorageKey(user), JSON.stringify(next));
+  return next;
 }
 
 function openNicknameModal(defaultValue = "") {
@@ -53,41 +225,13 @@ function closeNicknameModal() {
   nicknameError.textContent = "";
 }
 
-function getProfileStorageKey(user) {
-  return `seiseigames_profile_${user.uid}`;
-}
-
-function loadStoredProfile(user) {
-  try {
-    const raw = localStorage.getItem(getProfileStorageKey(user));
-    if (!raw) {
-      return { nickname: "", coin: 0 };
-    }
-    const data = JSON.parse(raw);
-    return {
-      nickname: typeof data.nickname === "string" ? data.nickname : "",
-      coin: Number.isFinite(data.coin) ? data.coin : 0,
-    };
-  } catch (error) {
-    console.error(error);
-    return { nickname: "", coin: 0 };
-  }
-}
-
-function saveStoredProfile(user, partialData = {}) {
-  const current = loadStoredProfile(user);
-  const next = {
-    ...current,
-    ...partialData,
-  };
-  localStorage.setItem(getProfileStorageKey(user), JSON.stringify(next));
-  return next;
-}
-
 function applyProfileToGameSelect(profile, user) {
-  const nickname = profile && profile.nickname ? profile.nickname : (user && user.displayName ? user.displayName : "名前なし");
+  const nickname = profile && profile.nickname ? profile.nickname : getFallbackNickname(user);
   const coin = Number((profile && profile.coin) || 0);
 
+  if (userName) {
+    userName.textContent = nickname;
+  }
   if (gameSelectUserName) {
     gameSelectUserName.textContent = nickname;
   }
@@ -102,6 +246,7 @@ function applyProfileToGameSelect(profile, user) {
 async function loadProfile(user) {
   const data = loadStoredProfile(user);
   currentProfile = data;
+  isAdminUser = Boolean(data.isAdmin) || isAdminAccount(user);
   applyProfileToGameSelect(data, user);
   return data;
 }
@@ -111,6 +256,17 @@ async function ensureNicknameBeforeOpen() {
   const data = await loadProfile(currentUser);
   const nickname = sanitizeNickname((data && data.nickname) || "");
   if (nickname) return true;
+
+  const fallbackName = getFallbackNickname(currentUser);
+  if (fallbackName) {
+    applyProfileToGameSelect({
+      ...(currentProfile || {}),
+      nickname: fallbackName,
+      coin: currentProfile && Number.isFinite(Number(currentProfile.coin)) ? Number(currentProfile.coin) : 0,
+    }, currentUser);
+    return true;
+  }
+
   openNicknameModal(currentUser.displayName || "");
   return false;
 }
@@ -130,6 +286,7 @@ function closeGameSelectScreen() {
 function updateLoggedOutView() {
   currentUser = null;
   currentProfile = null;
+  isAdminUser = false;
 
   if (statusDot) statusDot.classList.remove("ok");
   if (statusText) statusText.textContent = "未ログイン";
@@ -142,12 +299,16 @@ function updateLoggedOutView() {
   if (userEmail) userEmail.textContent = "---";
   if (gameSelectUserName) gameSelectUserName.textContent = "---";
   if (gameSelectUserSub) gameSelectUserSub.textContent = "コイン: 0";
+  setAdminEntryVisible(false);
+  closeAdminScreen();
+  resetAdminView();
   closeNicknameModal();
   closeGameSelectScreen();
 }
 
 async function updateLoggedInView(user) {
   currentUser = user;
+  isAdminUser = isAdminAccount(user);
 
   if (statusDot) statusDot.classList.add("ok");
   if (statusText) statusText.textContent = "ログイン中";
@@ -158,10 +319,11 @@ async function updateLoggedInView(user) {
   if (userPhoto) userPhoto.src = user.photoURL || "";
   if (userName) userName.textContent = user.displayName || "名前なし";
   if (userEmail) userEmail.textContent = user.email || "メールなし";
-  if (gameSelectUserName) gameSelectUserName.textContent = user.displayName || "名前なし";
-  if (gameSelectUserSub) gameSelectUserSub.textContent = "コイン: 0";
+  setAdminEntryVisible(isAdminUser);
 
-  await loadProfile(user);
+  const profile = await loadProfile(user);
+  setAdminEntryVisible(Boolean(profile && profile.isAdmin) || isAdminAccount(user));
+  resetAdminView();
 }
 
 if (loginBtn) {
@@ -201,6 +363,7 @@ if (gameSelectCard) {
     try {
       const canOpen = await ensureNicknameBeforeOpen();
       if (!canOpen) return;
+      closeAdminScreen();
       openGameSelectScreen();
     } catch (error) {
       console.error(error);
@@ -218,7 +381,59 @@ if (avatarGachaCard) {
 
 if (gameSelectHomeBtn) {
   gameSelectHomeBtn.addEventListener("click", () => {
+    closeAdminScreen();
     closeGameSelectScreen();
+  });
+}
+
+if (adminEntryBtn) {
+  adminEntryBtn.addEventListener("click", async () => {
+    if (!isAdminUser) return;
+    resetAdminView();
+    openAdminScreen();
+    try {
+      await loadAdminUsers();
+    } catch (error) {
+      console.error(error);
+      if (adminUserList) {
+        adminUserList.innerHTML = '<div class="admin-empty">オンライン一覧の読み込みに失敗しました。</div>';
+      }
+      setAdminStatus("オンライン一覧の読み込みに失敗しました。");
+    }
+  });
+}
+
+if (adminCloseBtn) {
+  adminCloseBtn.addEventListener("click", () => {
+    closeAdminScreen();
+  });
+}
+
+if (adminSearchInput) {
+  adminSearchInput.addEventListener("input", () => {
+    renderAdminUsers(adminSearchInput.value);
+  });
+}
+
+if (adminAddCoinBtn) {
+  adminAddCoinBtn.addEventListener("click", async () => {
+    try {
+      await applyAdminCoin("add");
+    } catch (error) {
+      console.error(error);
+      setAdminStatus(error && error.message ? error.message : "コイン付与に失敗しました。");
+    }
+  });
+}
+
+if (adminRemoveCoinBtn) {
+  adminRemoveCoinBtn.addEventListener("click", async () => {
+    try {
+      await applyAdminCoin("remove");
+    } catch (error) {
+      console.error(error);
+      setAdminStatus(error && error.message ? error.message : "コイン没収に失敗しました。");
+    }
   });
 }
 

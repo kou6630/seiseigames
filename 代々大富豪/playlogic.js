@@ -146,6 +146,11 @@ export function getTradeOrderFromLastResult(lastResult, members) {
   return withoutMiyako;
 }
 
+export function getStartPlayerIdFromLastResult(lastResult, members) {
+  const order = getTradeOrderFromLastResult(lastResult, members);
+  return order.length ? order[order.length - 1] : "";
+}
+
 export function getTradeRoleMap(lastResult, members) {
   const memberList = Array.isArray(members) ? members : [];
   const roleMap = {};
@@ -447,13 +452,55 @@ function generateCandidateSets(hand, settings, game) {
   return Array.from(dedupe.values());
 }
 
+export function getEffectivePlayedRanks(play, cards) {
+  if (!play || !Array.isArray(cards) || !cards.length) return [];
+  if (play.type === "group") {
+    if (play.comparePower === 13) {
+      return cards.map(function() { return "JOKER"; });
+    }
+    const label = getRankLabelFromPower(play.comparePower);
+    return cards.map(function() { return label; });
+  }
+  if (play.type === "stairs") {
+    const startPower = Math.max(0, play.comparePower - play.length + 1);
+    const result = [];
+    for (let power = startPower; power <= play.comparePower; power += 1) {
+      result.push(getRankLabelFromPower(power));
+    }
+    return result;
+  }
+  return cards.map(function(card) { return card && card.rank ? card.rank : ""; });
+}
+
+export function isForbiddenAgariCard(card, reversed) {
+  if (!card) return false;
+  if (card.rank === "JOKER") return true;
+  if (card.rank === "8") return true;
+  if (!reversed && card.rank === "2") return true;
+  if (reversed && card.rank === "3") return true;
+  return false;
+}
+
+export function isForbiddenAgariCards(cards, reversed, enabled) {
+  if (!enabled) return false;
+  return (cards || []).some(function(card) {
+    return isForbiddenAgariCard(card, reversed);
+  });
+}
+
 export function chooseAutoCards(hand, game, settings) {
   const candidates = generateCandidateSets(hand, settings, game).map(function(cards) {
     return { cards: cards, check: validatePlaySelection(cards, game, settings) };
   }).filter(function(item) { return item.check.ok; });
   if (!candidates.length) return null;
   const reversed = getEffectiveRevolution(game);
+  const foulAgariEnabled = !!(settings && settings.foulAgariEnabled);
   candidates.sort(function(a, b) {
+    const aRemain = Math.max(0, (hand || []).length - a.cards.length);
+    const bRemain = Math.max(0, (hand || []).length - b.cards.length);
+    const aForbiddenFinish = aRemain === 0 && isForbiddenAgariCards(a.cards, reversed, foulAgariEnabled);
+    const bForbiddenFinish = bRemain === 0 && isForbiddenAgariCards(b.cards, reversed, foulAgariEnabled);
+    if (aForbiddenFinish !== bForbiddenFinish) return aForbiddenFinish ? 1 : -1;
     if (a.check.play.length !== b.check.play.length) return a.check.play.length - b.check.play.length;
     const aStrength = getPlayStrengthScore(a.check.play.comparePower, reversed);
     const bStrength = getPlayStrengthScore(b.check.play.comparePower, reversed);
@@ -466,9 +513,29 @@ export function chooseAutoCards(hand, game, settings) {
   return candidates[0].cards;
 }
 
-export function finalizePlayer(game, targetId, settings) {
+function insertFinishOrder(game, targetId, isFoul) {
   if (!Array.isArray(game.finishOrder)) game.finishOrder = [];
-  if (!game.finishOrder.includes(targetId)) game.finishOrder.push(targetId);
+  const currentOrder = game.finishOrder.filter(function(id) { return id !== targetId; });
+  const fallen = new Set(Array.isArray(game.fallenPlayerIds) ? game.fallenPlayerIds : []);
+  if (isFoul) {
+    currentOrder.push(targetId);
+    game.finishOrder = currentOrder;
+    return;
+  }
+  const safeIndex = currentOrder.findIndex(function(id) { return fallen.has(id); });
+  if (safeIndex < 0) currentOrder.push(targetId);
+  else currentOrder.splice(safeIndex, 0, targetId);
+  game.finishOrder = currentOrder;
+}
+
+export function finalizePlayer(game, targetId, settings, isFoul) {
+  if (!Array.isArray(game.finishOrder)) game.finishOrder = [];
+  if (isFoul) {
+    const fallen = new Set(Array.isArray(game.fallenPlayerIds) ? game.fallenPlayerIds : []);
+    fallen.add(targetId);
+    game.fallenPlayerIds = Array.from(fallen);
+  }
+  insertFinishOrder(game, targetId, isFoul);
   let miyakoDroppedPlayerId = "";
   if (settings.miyakoOchiEnabled && game.previousChampionId && !game.miyakoDropped && game.finishOrder.length === 1 && game.finishOrder[0] !== game.previousChampionId) {
     const fallen = new Set(Array.isArray(game.fallenPlayerIds) ? game.fallenPlayerIds : []);
@@ -477,7 +544,7 @@ export function finalizePlayer(game, targetId, settings) {
     game.miyakoDropped = true;
     game.miyakoDroppedPlayerId = game.previousChampionId;
     miyakoDroppedPlayerId = game.previousChampionId;
-    if (!game.finishOrder.includes(game.previousChampionId)) game.finishOrder.push(game.previousChampionId);
+    insertFinishOrder(game, game.previousChampionId, true);
   }
   return miyakoDroppedPlayerId;
 }
@@ -485,7 +552,7 @@ export function finalizePlayer(game, targetId, settings) {
 export function maybeFinishGame(roomData, game, nowMs) {
   const active = getActivePlayerIds(game);
   if (active.length > 1) return null;
-  if (active.length === 1 && !game.finishOrder.includes(active[0])) game.finishOrder.push(active[0]);
+  if (active.length === 1 && !game.finishOrder.includes(active[0])) insertFinishOrder(game, active[0], false);
   game.phase = "finished";
   game.currentTurnPlayerId = "";
   game.currentTurnStartedAtMs = 0;
@@ -698,10 +765,11 @@ export function createMutatePlay(deps) {
         game.hands[actorId] = sortHandCards(removeCardsByIds(fromHand, safeCardIds));
         game.pendingSevenPass = null;
         let miyakoDroppedPlayerId = "";
-        if (!game.hands[actorId].length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings);
+        const foulFinish = !game.hands[actorId].length && isForbiddenAgariCards(giveCards, getEffectiveRevolution(game), settings.foulAgariEnabled);
+        if (!game.hands[actorId].length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings, foulFinish);
         const lastResult = maybeFinishGame(roomData, game, nowMs);
         if (lastResult) {
-          game.lastActionText = getMemberName(actorId, members) + " が10捨てを完了して上がりました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
+          game.lastActionText = getMemberName(actorId, members) + (foulFinish ? " が10捨てを完了しました / 反則上がり" : " が10捨てを完了して上がりました") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
           game.ruleEffectState = null;
           roomData.lastResult = lastResult;
           roomData.gameData = game;
@@ -740,10 +808,11 @@ export function createMutatePlay(deps) {
       } : null;
       game.pendingSevenPass = null;
       let miyakoDroppedPlayerId = "";
-      if (!game.hands[actorId].length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings);
+      const foulFinish = !game.hands[actorId].length && isForbiddenAgariCards(giveCards, getEffectiveRevolution(game), settings.foulAgariEnabled);
+      if (!game.hands[actorId].length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings, foulFinish);
       const lastResult = maybeFinishGame(roomData, game, nowMs);
       if (lastResult) {
-        game.lastActionText = getMemberName(actorId, members) + " が渡し終えて上がりました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
+        game.lastActionText = getMemberName(actorId, members) + (foulFinish ? " が渡し終えました / 反則上がり" : " が渡し終えて上がりました") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
         game.ruleEffectState = null;
         roomData.lastResult = lastResult;
         roomData.gameData = game;
@@ -792,7 +861,9 @@ export function createMutatePlay(deps) {
     const previousLockedSuitKey = game.lockedSuitKey || "";
     const previousNumberLockKey = typeof game.numberLockKey === "number" ? game.numberLockKey : null;
     const previousEffectiveRevolution = getEffectiveRevolution(game);
+    let forbiddenAgari = false;
     const playedRanks = cards.map(function(card) { return card.rank; });
+    const effectivePlayedRanks = getEffectivePlayedRanks(play, cards);
     const messageParts = [];
     game.hands[actorId] = removeCardsByIds(hand, safeCardIds);
     game.lastPlay = {
@@ -822,11 +893,11 @@ export function createMutatePlay(deps) {
       game.revolution = !game.revolution;
       messageParts.push("階段革命");
     }
-    if (settings.jackBackEnabled && playedRanks.includes("J")) {
+    if (settings.jackBackEnabled && effectivePlayedRanks.includes("J")) {
       game.jackBackActive = !game.jackBackActive;
       messageParts.push("Jバック");
     }
-    if (settings.sixReverseEnabled && playedRanks.includes("6")) {
+    if (settings.sixReverseEnabled && effectivePlayedRanks.includes("6")) {
       game.direction = game.direction === -1 ? 1 : -1;
       messageParts.push("6リバース");
     }
@@ -842,27 +913,28 @@ export function createMutatePlay(deps) {
         }
       }
     }
-    const fiveCount = settings.skipFiveEnabled ? cards.filter(function(card) { return card.rank === "5"; }).length : 0;
+    const fiveCount = settings.skipFiveEnabled ? effectivePlayedRanks.filter(function(rank) { return rank === "5"; }).length : 0;
     const fiveSkipExtraSteps = getFiveSkipExtraSteps(fiveCount);
     const fiveSkippedPlayerIds = getSkippedPlayerIds(game.turnOrder, game.finishOrder, actorId, game.direction, [], fiveSkipExtraSteps);
     if (fiveCount > 0) messageParts.push("5飛ばし");
-    const tenCount = settings.tenDumpEnabled ? cards.filter(function(card) { return card.rank === "10"; }).length : 0;
+    const tenCount = settings.tenDumpEnabled ? effectivePlayedRanks.filter(function(rank) { return rank === "10"; }).length : 0;
     if (tenCount > 0) messageParts.push("10捨て");
-    const eightTriggered = settings.eightCutEnabled && playedRanks.includes("8");
+    const eightTriggered = settings.eightCutEnabled && effectivePlayedRanks.includes("8");
     if (eightTriggered) messageParts.push("8切");
     if (spadeThreeReturnTriggered) messageParts.push("スペ3返し");
     const ninetyNineCarTriggered = !!(
       settings.ninetyNineCarEnabled
       && play.type === "group"
       && play.length >= 2
-      && cards.every(function(card) { return card.rank === "9"; })
+      && effectivePlayedRanks.every(function(rank) { return rank === "9"; })
     );
     if (ninetyNineCarTriggered) messageParts.push("99車");
     const clearTriggered = eightTriggered || ninetyNineCarTriggered || spadeThreeReturnTriggered;
     const clearReason = spadeThreeReturnTriggered ? "スペ3返し" : (ninetyNineCarTriggered ? "99車" : "8切り");
-    const sevenCount = settings.sevenPassEnabled ? cards.filter(function(card) { return card.rank === "7"; }).length : 0;
+    const sevenCount = settings.sevenPassEnabled ? effectivePlayedRanks.filter(function(rank) { return rank === "7"; }).length : 0;
     if (sevenCount > 0) messageParts.push("7渡し");
     const remainingHand = getCurrentHand(game, actorId);
+    forbiddenAgari = !remainingHand.length && isForbiddenAgariCards(cards, getEffectiveRevolution(game), settings.foulAgariEnabled);
     const nextTarget = getNextActivePlayer(game.turnOrder, game.finishOrder, actorId, game.direction, [], 1);
     if (tenCount > 0 && remainingHand.length > 0) {
       game.passedPlayerIds = fiveSkippedPlayerIds.slice();
@@ -905,10 +977,10 @@ export function createMutatePlay(deps) {
     }
 
     let miyakoDroppedPlayerId = "";
-    if (!remainingHand.length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings);
+    if (!remainingHand.length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings, forbiddenAgari);
     const lastResult = maybeFinishGame(roomData, game, nowMs);
     if (lastResult) {
-      game.lastActionText = getMemberName(actorId, members) + " が上がりました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
+      game.lastActionText = getMemberName(actorId, members) + (forbiddenAgari ? " が反則上がり" : " が上がりました") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
       game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, nowMs);
       game.pendingRuleEffectUntilMs = getRuleEffectLockUntilMs(messageParts);
       roomData.lastResult = lastResult;

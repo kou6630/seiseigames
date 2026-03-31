@@ -69,6 +69,10 @@ export function createUI(deps) {
   let lastMembersLayoutKey = "";
   let lastOwnTurnMeterKey = "";
   let lastOwnTurnMeterStartedAtMs = 0;
+  let hoverPreviewCardIds = new Set();
+  let cachedRoleStateKey = "";
+  let cachedRoleMap = {};
+  let lastRenderedRoleStateKey = "";
 
   const roleImageMap = {
     "大富豪": "img/main/大富豪.png",
@@ -126,6 +130,24 @@ export function createUI(deps) {
     }).join("");
   }
 
+  function buildRoleStateKey(list, lastResult, currentGame) {
+    const memberIds = Array.isArray(list) ? list.map(function(member) { return member.id; }).join("|") : "";
+    const finishOrderKey = lastResult && Array.isArray(lastResult.finishOrder) ? lastResult.finishOrder.join("|") : "";
+    const lastMiyakoKey = lastResult && lastResult.miyakoOchiPlayerId ? lastResult.miyakoOchiPlayerId : "";
+    const currentMiyakoKey = currentGame && currentGame.miyakoDroppedPlayerId ? currentGame.miyakoDroppedPlayerId : "";
+    const phaseKey = currentGame && currentGame.phase ? currentGame.phase : "";
+    return [memberIds, finishOrderKey, lastMiyakoKey, currentMiyakoKey, phaseKey].join("__");
+  }
+
+  function getCachedRoleMap(list, lastResult, currentGame) {
+    const key = buildRoleStateKey(list, lastResult, currentGame);
+    if (key !== cachedRoleStateKey) {
+      cachedRoleStateKey = key;
+      cachedRoleMap = getTradeRoleMap(lastResult, list || []);
+    }
+    return cachedRoleMap;
+  }
+
   function getSeatRoleImageInfo(memberId, roleMap, lastResult) {
     const state = getState();
     const currentGame = state && state.currentGame ? state.currentGame : null;
@@ -140,14 +162,8 @@ export function createUI(deps) {
   }
 
   function buildMembersLayoutKey(list) {
-    const state = getState();
-    const roleMap = getTradeRoleMap(state.currentLastResult, list || []);
     return (list || []).map(function(member) {
-      const roleImageInfo = getSeatRoleImageInfo(member.id, roleMap, state.currentLastResult);
-      const handCount = state.currentGame && state.currentGame.phase !== "waiting"
-        ? getCurrentHand(state.currentGame, member.id).length
-        : 0;
-      return [member.id, member.name || "", member.isHost ? "1" : "0", roleImageInfo.label || "", String(handCount)].join("|");
+      return [member.id, member.name || "", member.isHost ? "1" : "0"].join("|");
     }).join("__");
   }
 
@@ -165,18 +181,36 @@ export function createUI(deps) {
   function updateSeatLiveState() {
     const state = getState();
     const list = Array.isArray(state.currentMembers) ? state.currentMembers : [];
-    const roleMap = getTradeRoleMap(state.currentLastResult, list);
+    const roleStateKey = buildRoleStateKey(list, state.currentLastResult, state.currentGame);
+    const shouldUpdateRoleImage = roleStateKey !== lastRenderedRoleStateKey;
+    const roleMap = shouldUpdateRoleImage ? getCachedRoleMap(list, state.currentLastResult, state.currentGame) : null;
     const highlightedPlayerId = getHighlightedPlayerId(state.currentGame);
     list.forEach(function(member) {
       const seat = membersList.querySelector('.seatCard[data-player-id="' + CSS.escape(String(member.id)) + '"]');
       if (!seat) return;
       applySeatTurnVisual(seat, highlightedPlayerId === member.id);
       seat.classList.toggle("isMe", member.id === state.playerId);
-      const handCountLabel = seat.querySelector("[data-hand-count-label]");
-      const handEmptyLabel = seat.querySelector("[data-hand-empty-label]");
       const handCount = state.currentGame && state.currentGame.phase !== "waiting" ? getCurrentHand(state.currentGame, member.id).length : 0;
-      if (handCountLabel) handCountLabel.textContent = String(handCount) + "枚";
-      if (handEmptyLabel) handEmptyLabel.textContent = handCount > 0 ? "" : "なし";
+      const handArea = seat.lastElementChild;
+      if (handArea) {
+        const stackCount = Math.min(handCount, 5);
+        const cardStackHtml = handCount > 0
+          ? '<div style="display:flex;align-items:center;justify-content:center;gap:8px;min-height:28px;">'
+            + '<div style="height:24px;display:flex;justify-content:center;align-items:flex-end;">'
+            + Array.from({ length: stackCount }).map(function(_, stackIndex) {
+              const shade = 0.2 + (stackIndex * 0.04);
+              return '<span style="display:block;width:16px;height:22px;margin-left:' + (stackIndex === 0 ? 0 : -10) + 'px;border-radius:5px;border:1px solid rgba(255,255,255,0.2);background:linear-gradient(180deg, rgba(255,255,255,0.96), rgba(235,240,255,' + (0.86 - shade * 0.2).toFixed(2) + '));box-shadow:0 3px 8px rgba(0,0,0,0.18);"></span>';
+            }).join('')
+            + '</div>'
+            + '<div style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:800;color:#ffffff;white-space:nowrap;">'
+            + '<span style="opacity:0.78;">×</span>'
+            + '<span data-hand-count-label="1">' + handCount + '枚</span>'
+            + '</div>'
+            + '</div>'
+          : '<div data-hand-empty-label="1" style="min-height:28px;display:flex;justify-content:center;align-items:center;font-size:11px;opacity:0.56;">なし</div>';
+        handArea.innerHTML = cardStackHtml;
+      }
+      if (!shouldUpdateRoleImage) return;
       const roleImageInfo = getSeatRoleImageInfo(member.id, roleMap, state.currentLastResult);
       const roleImage = seat.querySelector("[data-role-image]");
       if (roleImage) {
@@ -187,6 +221,7 @@ export function createUI(deps) {
         roleImage.style.display = nextSrc ? "block" : "none";
       }
     });
+    if (shouldUpdateRoleImage) lastRenderedRoleStateKey = roleStateKey;
   }
 
   function buildEffectStatusText(game) {
@@ -234,7 +269,16 @@ export function createUI(deps) {
     seatActionMenu = null;
   }
 
+  function isAppSettingsOpen() {
+    const overlay = document.getElementById("appSettingsOverlay");
+    return !!(overlay && !overlay.classList.contains("hidden"));
+  }
+
   function openSeatActionMenu(playerId, clientX, clientY) {
+    if (isAppSettingsOpen()) {
+      closeSeatActionMenu();
+      return;
+    }
     const state = getState();
     const targetMember = Array.isArray(state.currentMembers)
       ? state.currentMembers.find(function(member) { return member && member.id === playerId; })
@@ -667,6 +711,71 @@ export function createUI(deps) {
     return hand.filter(function(card) { return state.selectedCardIds.has(card.id); });
   }
 
+  function chooseCards(items, count) {
+    if (count <= 0) return [[]];
+    if (!Array.isArray(items) || items.length < count) return [];
+    const result = [];
+    function walk(start, picked) {
+      if (picked.length === count) {
+        result.push(picked.slice());
+        return;
+      }
+      for (let index = start; index < items.length; index += 1) {
+        picked.push(items[index]);
+        walk(index + 1, picked);
+        picked.pop();
+      }
+    }
+    walk(0, []);
+    return result;
+  }
+
+  function getHoverPreviewCardIds(cardId) {
+    const state = getState();
+    const game = state.currentGame;
+    if (!cardId || !isMyTurn() || !game || !game.lastPlay || game.pendingSevenPass || game.pendingClearField) return new Set();
+    const hand = sortHandCards(getCurrentHand(game, state.playerId));
+    const hoveredCard = hand.find(function(card) { return card.id === cardId; });
+    if (!hoveredCard) return new Set();
+    const requiredLength = game.lastPlay && game.lastPlay.length ? game.lastPlay.length : 0;
+    if (!requiredLength || requiredLength < 1) return new Set();
+    const others = hand.filter(function(card) { return card.id !== cardId; });
+    const candidates = chooseCards(others, Math.max(0, requiredLength - 1)).map(function(group) {
+      return [hoveredCard].concat(group);
+    });
+    const valid = candidates.map(function(cards) {
+      return { cards: cards, result: validatePlaySelection(cards, game, state.currentSettings) };
+    }).filter(function(item) {
+      return item.result && item.result.ok;
+    }).sort(function(a, b) {
+      const aJokerCount = a.cards.filter(function(card) { return card.rank === "JOKER"; }).length;
+      const bJokerCount = b.cards.filter(function(card) { return card.rank === "JOKER"; }).length;
+      if (aJokerCount !== bJokerCount) return aJokerCount - bJokerCount;
+      if (a.result.play.comparePower !== b.result.play.comparePower) return a.result.play.comparePower - b.result.play.comparePower;
+      return a.cards.map(function(card) { return String(card.id); }).join("|").localeCompare(b.cards.map(function(card) { return String(card.id); }).join("|"));
+    });
+    return valid.length ? new Set(valid[0].cards.map(function(card) { return card.id; })) : new Set();
+  }
+
+  function applyHoverPreview(cardId) {
+    const nextIds = getHoverPreviewCardIds(cardId);
+    let changed = nextIds.size !== hoverPreviewCardIds.size;
+    if (!changed) {
+      nextIds.forEach(function(id) {
+        if (!hoverPreviewCardIds.has(id)) changed = true;
+      });
+    }
+    if (!changed) return;
+    hoverPreviewCardIds = nextIds;
+    renderMyHand(getCurrentHand(getState().currentGame, getState().playerId));
+  }
+
+  function clearHoverPreview() {
+    if (!hoverPreviewCardIds.size) return;
+    hoverPreviewCardIds = new Set();
+    renderMyHand(getCurrentHand(getState().currentGame, getState().playerId));
+  }
+
   function renderMyHand(cards) {
     const state = getState();
     const hand = sortHandCards(cards);
@@ -676,7 +785,10 @@ export function createUI(deps) {
     Array.from(state.selectedCardIds).forEach(function(id) {
       if (!handIds.has(id)) state.selectedCardIds.delete(id);
     });
-    if (!isMyTurn() && !isPendingTransferMine() && !isTradePhase()) state.selectedCardIds.clear();
+    if (!isMyTurn() && !isPendingTransferMine() && !isTradePhase()) {
+      state.selectedCardIds.clear();
+      hoverPreviewCardIds = new Set();
+    }
 
     if (!hand.length) {
       myHandList.innerHTML = '<div class="handEmpty">手札はありません</div>';
@@ -687,7 +799,11 @@ export function createUI(deps) {
     const selectable = isMyTurn() || isPendingTransferMine() || (isTradePhase() && !!getTradePairForPlayer(state.currentGame, state.playerId));
     myHandList.innerHTML = hand.map(function(card) {
       const selected = state.selectedCardIds.has(card.id);
-      return '<div class="' + cardClass(card) + (selectable ? ' cardSelectable' : '') + (selected ? ' cardSelected' : '') + '" data-card-id="' + escapeHtml(card.id) + '" style="' + cardInlineStyle(card) + '">' + escapeHtml(cardText(card)) + '</div>';
+      const preview = hoverPreviewCardIds.has(card.id);
+      let extraStyle = cardInlineStyle(card) || "";
+      if (preview && !selected) extraStyle += 'transform:translateY(-9px);box-shadow:0 0 0 2px rgba(120,210,255,0.92),0 10px 22px rgba(70,170,255,0.34);transition:transform 120ms ease, box-shadow 120ms ease;';
+      if (!preview && !selected) extraStyle += 'transition:transform 120ms ease, box-shadow 120ms ease;';
+      return '<div class="' + cardClass(card) + (selectable ? ' cardSelectable' : '') + (selected ? ' cardSelected' : '') + '" data-card-id="' + escapeHtml(card.id) + '" style="' + extraStyle + '">' + escapeHtml(cardText(card)) + '</div>';
     }).join("");
 
     updateActionButtons();
@@ -708,7 +824,7 @@ export function createUI(deps) {
     settingsButton.classList.toggle("hidden", !amHost || inGame);
     startGameButton.classList.toggle("hidden", !amHost);
     startGameButton.textContent = finished ? "次の試合" : "ゲーム開始";
-    settingsButton.textContent = finished ? "終了" : "設定";
+    settingsButton.textContent = finished ? "終了" : "ルール設定";
     startGameButton.disabled = !amHost || inGame || state.currentMembers.length < 2;
     if (!amHost || inGame || finished) settingsPanel.classList.add("hidden");
     updatePreStartLock();
@@ -773,6 +889,7 @@ export function createUI(deps) {
 
     if (!list.length) {
       lastMembersLayoutKey = "";
+      lastRenderedRoleStateKey = "";
       membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="tableCenterTitle">TABLE CENTER</div><div class="tableCenterOwner" id="fieldOwnerLabel">場は空です</div><div class="fieldCards" id="lastPlayList"><div class="fieldEmpty">まだ場札はありません</div></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
       bindArenaElements();
       applyRoomScale();
@@ -780,7 +897,6 @@ export function createUI(deps) {
       return;
     }
 
-    const roleMap = getTradeRoleMap(state.currentLastResult, list);
     const layoutKey = buildMembersLayoutKey(list);
     if (layoutKey === lastMembersLayoutKey && membersList.querySelectorAll(".seatCard").length === list.length) {
       updateSeatLiveState();
@@ -790,6 +906,8 @@ export function createUI(deps) {
       return;
     }
     lastMembersLayoutKey = layoutKey;
+    lastRenderedRoleStateKey = "";
+    const roleMap = getCachedRoleMap(list, state.currentLastResult, state.currentGame);
     const seatCount = list.length;
     const radius = seatCount <= 2 ? 190 : seatCount <= 4 ? 220 : seatCount <= 6 ? 240 : 252;
     const seatScale = seatCount <= 4 ? 1 : Math.max(0.8, 1 - ((seatCount - 4) * 0.05));
@@ -868,7 +986,7 @@ export function createUI(deps) {
         + '</div>'
         + '<div style="height:' + handHeight + 'px;padding:0 10px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);font-size:' + handFontSize + 'px;">' + cardStackHtml.replaceAll('width:16px', 'width:' + handStackWidth + 'px').replaceAll('height:22px', 'height:' + handStackHeight + 'px').replaceAll('margin-left:' + 0 + 'px', 'margin-left:0px').replaceAll('margin-left:-10px', 'margin-left:-' + handStackOverlap + 'px').replaceAll('font-size:12px', 'font-size:' + handFontSize + 'px') + '</div>'
         + '</div>';
-    }).join('');
+    }).join("");
 
     membersList.innerHTML = leftHtml + centerHtml + seatsHtml + '</div>' + rightHtml;
     bindArenaElements();
@@ -944,6 +1062,7 @@ export function createUI(deps) {
 
   function setEntryMode() {
     lastMembersLayoutKey = "";
+    lastRenderedRoleStateKey = "";
     document.body.classList.remove("inRoom");
     refs.entryPanel.classList.remove("hidden");
     closeSeatActionMenu();
@@ -976,6 +1095,7 @@ export function createUI(deps) {
   }
 
   function setRoomMode() {
+    closeSeatActionMenu();
     document.body.classList.add("inRoom");
     refs.entryPanel.classList.add("hidden");
     roomPanel.classList.remove("hidden");
@@ -983,6 +1103,10 @@ export function createUI(deps) {
   }
 
   membersList.addEventListener("click", function(event) {
+    if (isAppSettingsOpen()) {
+      closeSeatActionMenu();
+      return;
+    }
     const target = event.target.closest("[data-seat-menu][data-player-id]");
     if (!target) {
       closeSeatActionMenu();
@@ -1005,6 +1129,21 @@ export function createUI(deps) {
     const target = event.target.closest("[data-card-id]");
     if (!target) return;
     onToggleCard(target.getAttribute("data-card-id"));
+  });
+
+  myHandList.addEventListener("mouseover", function(event) {
+    const target = event.target.closest("[data-card-id]");
+    if (!target || !myHandList.contains(target)) return;
+    applyHoverPreview(target.getAttribute("data-card-id"));
+  });
+
+  myHandList.addEventListener("mouseout", function(event) {
+    const target = event.target.closest("[data-card-id]");
+    if (!target) return;
+    const related = event.relatedTarget;
+    if (related && target.contains(related)) return;
+    if (related && myHandList.contains(related) && related.closest("[data-card-id]")) return;
+    clearHoverPreview();
   });
 
   playButton.addEventListener("click", onPlay);

@@ -63,6 +63,7 @@ const sixReverseToggle = document.getElementById("sixReverseToggle");
 const sevenPassToggle = document.getElementById("sevenPassToggle");
 const miyakoOchiToggle = document.getElementById("miyakoOchiToggle");
 const doubleDeckToggle = document.getElementById("doubleDeckToggle");
+const foulAgariToggle = document.getElementById("foulAgariToggle");
 const turnTime30 = document.getElementById("turnTime30");
 const turnTime15 = document.getElementById("turnTime15");
 const myHandCount = document.getElementById("myHandCount");
@@ -81,6 +82,17 @@ const loginInfoSub = document.getElementById("loginInfoSub");
 const roomLoginInfoPhoto = document.getElementById("roomLoginInfoPhoto");
 const roomLoginInfoName = document.getElementById("roomLoginInfoName");
 const roomLoginInfoSub = document.getElementById("roomLoginInfoSub");
+const entrySettingsButton = document.getElementById("entrySettingsButton");
+const roomSettingsGearButton = document.getElementById("roomSettingsGearButton");
+const appSettingsOverlay = document.getElementById("appSettingsOverlay");
+const appSettingsCloseButton = document.getElementById("appSettingsCloseButton");
+const seVolumeSlider = document.getElementById("seVolumeSlider");
+const bgmVolumeSlider = document.getElementById("bgmVolumeSlider");
+const seVolumeValue = document.getElementById("seVolumeValue");
+const bgmVolumeValue = document.getElementById("bgmVolumeValue");
+const settingsNicknameInput = document.getElementById("settingsNicknameInput");
+const saveNicknameButton = document.getElementById("saveNicknameButton");
+const appSettingsMessage = document.getElementById("appSettingsMessage");
 
 settingsPanel.style.maxHeight = "calc(100dvh - 150px)";
 settingsPanel.style.overflowY = "auto";
@@ -181,6 +193,14 @@ const RULE_EFFECT_IMAGE_MAP = {
   "マーク縛り": "./img/skills/makusibari.png"
 };
 const ENTRY_STORAGE_KEY = "nomi_entry_form_v1";
+const APP_VOLUME_STORAGE_KEY = "daifugo_app_volume_v1";
+const RENAME_COST_COIN = 100;
+const audioState = {
+  context: null,
+  masterGain: null,
+  seGain: null,
+  started: false
+};
 let currentAuthUser = null;
 let lastRuleEffectKey = "";
 let ruleEffectPlaying = false;
@@ -241,45 +261,179 @@ function loadEntryFormFromLocal() {
 function getProfileStorageKey(user) {
   return user && user.uid ? "seiseigames_profile_" + user.uid : "";
 }
-function getNicknameFromUser(user) {
-  if (!user || !user.uid) return "";
+function getStoredProfile(user) {
+  if (!user || !user.uid) return { nickname: "", coin: 0 };
   try {
     const raw = localStorage.getItem(getProfileStorageKey(user));
-    if (!raw) return normalize(user.displayName || "");
+    if (!raw) return { nickname: "", coin: 0 };
     const saved = JSON.parse(raw);
-    const nickname = saved && typeof saved.nickname === "string" ? normalize(saved.nickname) : "";
-    return nickname || normalize(user.displayName || "");
+    return {
+      nickname: saved && typeof saved.nickname === "string" ? normalize(saved.nickname) : "",
+      coin: saved && Number.isFinite(saved.coin) ? Number(saved.coin) : 0
+    };
   } catch (error) {
     console.error(error);
-    return normalize(user.displayName || "");
+    return { nickname: "", coin: 0 };
   }
+}
+
+function getNicknameFromUser(user) {
+  if (!user || !user.uid) return "";
+  const profile = getStoredProfile(user);
+  return profile.nickname || normalize(user.displayName || "");
+}
+function saveStoredProfile(user, patch) {
+  if (!user || !user.uid) return { nickname: "", coin: 0 };
+  const current = getStoredProfile(user);
+  const nextProfile = {
+    nickname: typeof patch.nickname === "string" ? normalize(patch.nickname).slice(0, 20) : current.nickname,
+    coin: Number.isFinite(patch.coin) ? Math.max(0, Number(patch.coin)) : current.coin
+  };
+  try {
+    localStorage.setItem(getProfileStorageKey(user), JSON.stringify(nextProfile));
+  } catch (error) {
+    console.error(error);
+  }
+  return nextProfile;
+}
+function setAppSettingsMessage(text, isError) {
+  if (!appSettingsMessage) return;
+  appSettingsMessage.textContent = text || "";
+  appSettingsMessage.style.color = isError ? "#ffd2d2" : "rgba(248,245,255,0.78)";
+}
+function clampVolume(value) {
+  if (!Number.isFinite(Number(value))) return 100;
+  return Math.max(0, Math.min(100, Number(value)));
+}
+function getStoredVolumes() {
+  try {
+    const raw = localStorage.getItem(APP_VOLUME_STORAGE_KEY);
+    const saved = raw ? JSON.parse(raw) : {};
+    return {
+      se: clampVolume(saved && saved.se),
+      bgm: clampVolume(saved && saved.bgm)
+    };
+  } catch (error) {
+    console.error(error);
+    return { se: 100, bgm: 100 };
+  }
+}
+function saveStoredVolumes(nextVolumes) {
+  const safeVolumes = {
+    se: clampVolume(nextVolumes && nextVolumes.se),
+    bgm: clampVolume(nextVolumes && nextVolumes.bgm)
+  };
+  try {
+    localStorage.setItem(APP_VOLUME_STORAGE_KEY, JSON.stringify(safeVolumes));
+  } catch (error) {
+    console.error(error);
+  }
+  return safeVolumes;
+}
+function syncVolumeInputs() {
+  const volumes = getStoredVolumes();
+  if (seVolumeSlider) seVolumeSlider.value = String(volumes.se);
+  if (bgmVolumeSlider) bgmVolumeSlider.value = String(volumes.bgm);
+  if (seVolumeValue) seVolumeValue.textContent = String(volumes.se);
+  if (bgmVolumeValue) bgmVolumeValue.textContent = String(volumes.bgm);
+}
+function ensureAudioContext() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!audioState.context) {
+    const context = new AudioContextClass();
+    const masterGain = context.createGain();
+    const seGain = context.createGain();
+    seGain.connect(masterGain);
+    masterGain.connect(context.destination);
+    audioState.context = context;
+    audioState.masterGain = masterGain;
+    audioState.seGain = seGain;
+  }
+  return audioState.context;
+}
+async function unlockAudio() {
+  const context = ensureAudioContext();
+  if (!context) return null;
+  if (context.state === "suspended") {
+    try {
+      await context.resume();
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  audioState.started = true;
+  applyAudioVolumes();
+  return context;
+}
+function applyAudioVolumes() {
+  const volumes = getStoredVolumes();
+  if (audioState.seGain) audioState.seGain.gain.value = volumes.se / 100;
+}
+function playSeTone(kind) {
+  const context = ensureAudioContext();
+  if (!context || !audioState.started || !audioState.seGain) return;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = kind === "action" ? "triangle" : "sine";
+  oscillator.frequency.setValueAtTime(kind === "action" ? 720 : 520, context.currentTime);
+  oscillator.frequency.exponentialRampToValueAtTime(kind === "action" ? 420 : 680, context.currentTime + 0.08);
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.22, context.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.1);
+  oscillator.connect(gain);
+  gain.connect(audioState.seGain);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.11);
+}
+function openAppSettings() {
+  if (!appSettingsOverlay) return;
+  syncVolumeInputs();
+  if (settingsNicknameInput) settingsNicknameInput.value = normalize((loginInfoName && loginInfoName.textContent) || getNicknameFromUser(currentAuthUser) || "");
+  setAppSettingsMessage("", false);
+  appSettingsOverlay.classList.remove("hidden");
+  appSettingsOverlay.setAttribute("aria-hidden", "false");
+}
+function closeAppSettings() {
+  if (!appSettingsOverlay) return;
+  appSettingsOverlay.classList.add("hidden");
+  appSettingsOverlay.setAttribute("aria-hidden", "true");
+  setAppSettingsMessage("", false);
+}
+function playUiSe(kind) {
+  unlockAudio().then(function() {
+    playSeTone(kind || "ui");
+  }).catch(function(error) {
+    console.error(error);
+  });
 }
 function applyLoggedInNickname(user) {
   currentAuthUser = user || null;
-  const nickname = getNicknameFromUser(user);
+  const profile = getStoredProfile(user);
+  const nickname = profile.nickname || getNicknameFromUser(user);
+  const coin = Number(profile.coin || 0);
   playerNameInput.value = nickname;
   playerNameInput.readOnly = !!nickname;
   playerNameInput.disabled = !!nickname;
   playerNameInput.placeholder = nickname ? "ログイン中のニックネームを使用" : "名前";
 
   const displayName = nickname || normalize(user && user.displayName) || "---";
-  const displaySub = user ? (normalize(user.email) || "ログイン中") : "Googleログインしてください";
-  const photoUrl = user && user.photoURL ? String(user.photoURL) : "";
-
+  const displaySub = "コイン: " + coin;
   if (loginInfoName) loginInfoName.textContent = displayName;
   if (loginInfoSub) loginInfoSub.textContent = displaySub;
   if (loginInfoPhoto) {
-    loginInfoPhoto.src = photoUrl;
-    loginInfoPhoto.style.display = photoUrl ? "block" : "none";
+    loginInfoPhoto.removeAttribute("src");
+    loginInfoPhoto.style.display = "block";
   }
 
   if (roomLoginInfoName) roomLoginInfoName.textContent = displayName;
   if (roomLoginInfoSub) roomLoginInfoSub.textContent = displaySub;
   if (roomLoginInfoPhoto) {
-    roomLoginInfoPhoto.src = photoUrl;
-    roomLoginInfoPhoto.style.display = photoUrl ? "block" : "none";
+    roomLoginInfoPhoto.removeAttribute("src");
+    roomLoginInfoPhoto.style.display = "block";
   }
 
+  if (settingsNicknameInput) settingsNicknameInput.value = displayName === "---" ? "" : displayName;
   updateState();
 }
 function updateState() { joinButton.disabled = !(normalize(playerNameInput.value) && normalize(roomWordInput.value)); }
@@ -380,22 +534,23 @@ async function maybePlayRuleEffects(game) {
 
 function collectRoomSettingsFromInputs() {
   return normalizeRoomSettings({
-    eightCutEnabled: eightCutToggle.checked,
+    eightCutEnabled: !!(eightCutToggle && eightCutToggle.checked),
     ninetyNineCarEnabled: !!(ninetyNineCarToggle && ninetyNineCarToggle.checked),
-    revolutionEnabled: revolutionToggle.checked,
-    stairsEnabled: stairsToggle.checked,
-    stairsRevolutionEnabled: stairsRevolutionToggle.checked,
-    lockEnabled: lockToggle.checked,
-    numberLockEnabled: numberLockToggle.checked,
-    skipFiveEnabled: skipFiveToggle.checked,
-    tenDumpEnabled: tenDumpToggle.checked,
-    jackBackEnabled: jackBackToggle.checked,
-    spadeThreeReturnEnabled: spadeThreeReturnToggle.checked,
-    sixReverseEnabled: sixReverseToggle.checked,
-    sevenPassEnabled: sevenPassToggle.checked,
-    miyakoOchiEnabled: miyakoOchiToggle.checked,
-    doubleDeckEnabled: doubleDeckToggle.checked,
-    turnTimeSeconds: turnTime15.checked ? 15 : 30,
+    revolutionEnabled: !!(revolutionToggle && revolutionToggle.checked),
+    stairsEnabled: !!(stairsToggle && stairsToggle.checked),
+    stairsRevolutionEnabled: !!(stairsRevolutionToggle && stairsRevolutionToggle.checked),
+    lockEnabled: !!(lockToggle && lockToggle.checked),
+    numberLockEnabled: !!(numberLockToggle && numberLockToggle.checked),
+    skipFiveEnabled: !!(skipFiveToggle && skipFiveToggle.checked),
+    tenDumpEnabled: !!(tenDumpToggle && tenDumpToggle.checked),
+    jackBackEnabled: !!(jackBackToggle && jackBackToggle.checked),
+    spadeThreeReturnEnabled: !!(spadeThreeReturnToggle && spadeThreeReturnToggle.checked),
+    sixReverseEnabled: !!(sixReverseToggle && sixReverseToggle.checked),
+    sevenPassEnabled: !!(sevenPassToggle && sevenPassToggle.checked),
+    miyakoOchiEnabled: !!(miyakoOchiToggle && miyakoOchiToggle.checked),
+    doubleDeckEnabled: !!(doubleDeckToggle && doubleDeckToggle.checked),
+    foulAgariEnabled: !!(foulAgariToggle && foulAgariToggle.checked),
+    turnTimeSeconds: turnTime15 && turnTime15.checked ? 15 : 30,
     cpuCount: currentSettings.cpuCount || 0
   });
 }
@@ -419,17 +574,24 @@ function applySettingsInputs() {
     [eightCutToggle, currentSettings.eightCutEnabled], [ninetyNineCarToggle, currentSettings.ninetyNineCarEnabled], [revolutionToggle, currentSettings.revolutionEnabled], [stairsToggle, currentSettings.stairsEnabled],
     [stairsRevolutionToggle, currentSettings.stairsRevolutionEnabled], [lockToggle, currentSettings.lockEnabled], [numberLockToggle, currentSettings.numberLockEnabled],
     [skipFiveToggle, currentSettings.skipFiveEnabled], [tenDumpToggle, currentSettings.tenDumpEnabled], [jackBackToggle, currentSettings.jackBackEnabled], [spadeThreeReturnToggle, currentSettings.spadeThreeReturnEnabled], [sixReverseToggle, currentSettings.sixReverseEnabled],
-    [sevenPassToggle, currentSettings.sevenPassEnabled], [miyakoOchiToggle, currentSettings.miyakoOchiEnabled], [doubleDeckToggle, currentSettings.doubleDeckEnabled]
+    [sevenPassToggle, currentSettings.sevenPassEnabled], [miyakoOchiToggle, currentSettings.miyakoOchiEnabled], [doubleDeckToggle, currentSettings.doubleDeckEnabled], [foulAgariToggle, currentSettings.foulAgariEnabled]
   ];
-  map.forEach(function(item) { item[0].checked = !!item[1]; });
-  turnTime30.checked = currentSettings.turnTimeSeconds !== 15;
-  turnTime15.checked = currentSettings.turnTimeSeconds === 15;
+  map.forEach(function(item) {
+    if (item[0]) item[0].checked = !!item[1];
+  });
+  if (turnTime30) turnTime30.checked = currentSettings.turnTimeSeconds !== 15;
+  if (turnTime15) turnTime15.checked = currentSettings.turnTimeSeconds === 15;
   const canEdit = isHostPlayer() && !(currentGame && (currentGame.phase === "playing" || currentGame.phase === "trading"));
-  [eightCutToggle, ninetyNineCarToggle, revolutionToggle, stairsToggle, stairsRevolutionToggle, lockToggle, numberLockToggle, skipFiveToggle, tenDumpToggle, jackBackToggle, spadeThreeReturnToggle, sixReverseToggle, sevenPassToggle, miyakoOchiToggle, doubleDeckToggle, turnTime30, turnTime15]
-    .forEach(function(input) { input.disabled = !canEdit; });
+  [eightCutToggle, ninetyNineCarToggle, revolutionToggle, stairsToggle, stairsRevolutionToggle, lockToggle, numberLockToggle, skipFiveToggle, tenDumpToggle, jackBackToggle, spadeThreeReturnToggle, sixReverseToggle, sevenPassToggle, miyakoOchiToggle, doubleDeckToggle, foulAgariToggle, turnTime30, turnTime15]
+    .forEach(function(input) { if (input) input.disabled = !canEdit; });
   if (cpuAddButton) cpuAddButton.disabled = !canEdit || currentSettings.cpuCount >= 6;
   if (cpuRemoveButton) cpuRemoveButton.disabled = !canEdit || currentSettings.cpuCount <= 0;
   if (cpuCountLabel) cpuCountLabel.textContent = String(currentSettings.cpuCount || 0);
+}
+
+function getStartPlayerIdFromLastResult(lastResult, members) {
+  const order = getTradeOrderFromLastResult(lastResult, members);
+  return order.length ? order[order.length - 1] : "";
 }
 
 function getMemberName(id, list) {
@@ -660,6 +822,7 @@ async function startGame() {
     let phase = "playing";
     let tradeState = null;
     let lastActionText = "ゲーム開始";
+    let firstTurnPlayerId = turnOrder[0] || "";
 
     if (lastResult && lastResult.finishOrder.length === count && count >= 4) {
       const order = getTradeOrderFromLastResult(lastResult, members);
@@ -688,6 +851,8 @@ async function startGame() {
         lastActionText = lastResult && lastResult.miyakoOchiPlayerId
           ? getMemberName(lastResult.miyakoOchiPlayerId, members) + " が都落ち / カード交換中"
           : "カード交換中";
+      } else {
+        firstTurnPlayerId = getStartPlayerIdFromLastResult(lastResult, members) || firstTurnPlayerId;
       }
     }
 
@@ -698,9 +863,9 @@ async function startGame() {
       jackBackActive: false,
       direction: 1,
       turnOrder: turnOrder,
-      currentTurnPlayerId: phase === "playing" ? (turnOrder[0] || "") : "",
+      currentTurnPlayerId: phase === "playing" ? firstTurnPlayerId : "",
       currentTurnStartedAtMs: phase === "playing" ? nowMs() : 0,
-      cpuActionAtMs: phase === "playing" && isCpuId(turnOrder[0] || "") ? nowMs() + 500 : 0,
+      cpuActionAtMs: phase === "playing" && isCpuId(firstTurnPlayerId) ? nowMs() + 500 : 0,
       hands: hands,
       lastPlay: null,
       lastPlayPlayerId: "",
@@ -785,6 +950,7 @@ roomWordInput.addEventListener("input", function() {
 });
 
 form.addEventListener("submit", async function(event) {
+  playUiSe("action");
   event.preventDefault();
   clearEntryMessage();
   const playerName = normalize(playerNameInput.value);
@@ -811,6 +977,7 @@ form.addEventListener("submit", async function(event) {
 });
 
 settingsButton.addEventListener("click", async function() {
+  playUiSe("ui");
   if (!isHostPlayer()) return;
   if (currentGame && currentGame.phase === "finished") {
     clearRoomMessage();
@@ -838,10 +1005,11 @@ async function handleRoomSettingsChange() {
   }
 }
 
-[eightCutToggle, ninetyNineCarToggle, revolutionToggle, stairsToggle, stairsRevolutionToggle, lockToggle, numberLockToggle, skipFiveToggle, tenDumpToggle, jackBackToggle, spadeThreeReturnToggle, sixReverseToggle, sevenPassToggle, miyakoOchiToggle, doubleDeckToggle, turnTime30, turnTime15]
-  .forEach(function(input) { input.addEventListener("change", handleRoomSettingsChange); });
+[eightCutToggle, ninetyNineCarToggle, revolutionToggle, stairsToggle, stairsRevolutionToggle, lockToggle, numberLockToggle, skipFiveToggle, tenDumpToggle, jackBackToggle, spadeThreeReturnToggle, sixReverseToggle, sevenPassToggle, miyakoOchiToggle, doubleDeckToggle, foulAgariToggle, turnTime30, turnTime15]
+  .forEach(function(input) { if (input) input.addEventListener("change", handleRoomSettingsChange); });
 if (cpuAddButton) {
   cpuAddButton.addEventListener("click", async function() {
+    playUiSe("ui");
     if (!isHostPlayer()) return;
     try {
       const nextSettings = Object.assign({}, currentSettings, { cpuCount: Math.min(6, (currentSettings.cpuCount || 0) + 1) });
@@ -857,6 +1025,7 @@ if (cpuAddButton) {
 }
 if (cpuRemoveButton) {
   cpuRemoveButton.addEventListener("click", async function() {
+    playUiSe("ui");
     if (!isHostPlayer()) return;
     try {
       const nextSettings = Object.assign({}, currentSettings, { cpuCount: Math.max(0, (currentSettings.cpuCount || 0) - 1) });
@@ -872,6 +1041,7 @@ if (cpuRemoveButton) {
 }
 
 startGameButton.addEventListener("click", async function() {
+  playUiSe("action");
   clearRoomMessage();
   startGameButton.disabled = true;
   try {
@@ -883,6 +1053,79 @@ startGameButton.addEventListener("click", async function() {
     updateStartButton();
   }
 });
+
+if (entrySettingsButton) {
+  entrySettingsButton.addEventListener("click", function() {
+    playUiSe("ui");
+    openAppSettings();
+  });
+}
+if (roomSettingsGearButton) {
+  roomSettingsGearButton.addEventListener("click", function() {
+    playUiSe("ui");
+    openAppSettings();
+  });
+}
+if (appSettingsCloseButton) {
+  appSettingsCloseButton.addEventListener("click", function() {
+    playUiSe("ui");
+    closeAppSettings();
+  });
+}
+if (appSettingsOverlay) {
+  appSettingsOverlay.addEventListener("click", function(event) {
+    if (event.target === appSettingsOverlay) {
+      playUiSe("ui");
+      closeAppSettings();
+    }
+  });
+}
+if (seVolumeSlider) {
+  seVolumeSlider.addEventListener("input", function() {
+    const safeValue = Math.max(0, Math.min(100, Number(seVolumeSlider.value) || 0));
+    if (seVolumeValue) seVolumeValue.textContent = String(safeValue);
+    saveStoredVolumes({ se: safeValue, bgm: bgmVolumeSlider ? bgmVolumeSlider.value : getStoredVolumes().bgm });
+    applyAudioVolumes();
+  });
+}
+if (bgmVolumeSlider) {
+  bgmVolumeSlider.addEventListener("input", function() {
+    const safeValue = Math.max(0, Math.min(100, Number(bgmVolumeSlider.value) || 0));
+    if (bgmVolumeValue) bgmVolumeValue.textContent = String(safeValue);
+    saveStoredVolumes({ se: seVolumeSlider ? seVolumeSlider.value : getStoredVolumes().se, bgm: safeValue });
+  });
+}
+if (saveNicknameButton) {
+  saveNicknameButton.addEventListener("click", function() {
+    playUiSe("action");
+    if (!currentAuthUser) {
+      setAppSettingsMessage("ログイン後に変更できます", true);
+      return;
+    }
+    const nextName = normalize(settingsNicknameInput && settingsNicknameInput.value).slice(0, 20);
+    if (!nextName) {
+      setAppSettingsMessage("名前を入れてください", true);
+      return;
+    }
+    const profile = getStoredProfile(currentAuthUser);
+    const currentName = profile.nickname || getNicknameFromUser(currentAuthUser);
+    if (nextName === currentName) {
+      setAppSettingsMessage("同じ名前です", true);
+      return;
+    }
+    const nextCoin = Number(profile.coin || 0) - RENAME_COST_COIN;
+    if (nextCoin < 0) {
+      setAppSettingsMessage("コインが足りません", true);
+      return;
+    }
+    saveStoredProfile(currentAuthUser, {
+      nickname: nextName,
+      coin: nextCoin
+    });
+    applyLoggedInNickname(currentAuthUser);
+    setAppSettingsMessage("名前を変更しました", false);
+  });
+}
 
 ui = createUI({
   refs: {
@@ -942,6 +1185,7 @@ ui = createUI({
   },
   actions: {
     onLeaveRoom: async function() {
+      playUiSe("ui");
       await leaveRoom();
     },
     onToggleCard: function(cardId) {
@@ -952,6 +1196,7 @@ ui = createUI({
       renderReceivedCardEffects();
     },
     onPlay: async function() {
+      playUiSe("action");
       clearRoomMessage();
       try {
         await applyPlay(playerId, getSelectedHandCards().map(function(card) { return card.id; }));
@@ -962,6 +1207,7 @@ ui = createUI({
       }
     },
     onPass: async function() {
+      playUiSe("ui");
       clearRoomMessage();
       try {
         await applyPass(playerId);
@@ -972,6 +1218,7 @@ ui = createUI({
       }
     },
     onTransfer: async function() {
+      playUiSe("action");
       clearRoomMessage();
       try {
         await applySevenTransfer(playerId, getSelectedHandCards().map(function(card) { return card.id; }));
@@ -1012,6 +1259,8 @@ onUserChanged(function(user) {
 });
 
 loadEntryFormFromLocal();
+syncVolumeInputs();
+applyAudioVolumes();
 renderRoomSettings(currentSettings);
 setEntryMode();
 updateState();

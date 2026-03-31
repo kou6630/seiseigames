@@ -18,6 +18,7 @@ export function normalizeRoomSettings(settings) {
     sevenPassEnabled: !!(settings && settings.sevenPassEnabled),
     miyakoOchiEnabled: !!(settings && settings.miyakoOchiEnabled),
     doubleDeckEnabled: !!(settings && settings.doubleDeckEnabled),
+    foulAgariEnabled: !!(settings && settings.foulAgariEnabled),
     turnTimeSeconds: settings && Number(settings.turnTimeSeconds) === 15 ? 15 : 30,
     cpuCount: Math.max(0, Math.min(6, Number(settings && settings.cpuCount) || 0))
   };
@@ -41,6 +42,7 @@ export function buildRulesText(settings) {
   if (safe.sevenPassEnabled) parts.push("7渡し");
   if (safe.miyakoOchiEnabled) parts.push("都落ち");
   if (safe.doubleDeckEnabled) parts.push("104枚");
+  if (safe.foulAgariEnabled) parts.push("反則上がり");
   if (safe.cpuCount) parts.push("CPU" + safe.cpuCount + "人");
   parts.push(safe.turnTimeSeconds + "秒");
   return parts.join(" / ");
