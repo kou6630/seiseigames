@@ -729,6 +729,65 @@
       opacity: 0.58;
       filter: saturate(0.75);
     }
+    .selectionPromptLayer {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 10040;
+    }
+    .selectionPromptText {
+      padding: 18px 28px;
+      border-radius: 22px;
+      background: rgba(0,0,0,0.26);
+      backdrop-filter: blur(8px);
+      color: #ffffff;
+      font-size: clamp(28px, 4.2vw, 52px);
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-align: center;
+      text-shadow: 0 6px 22px rgba(0,0,0,0.38);
+      opacity: 0;
+      transition: opacity 480ms ease;
+      white-space: nowrap;
+    }
+    #directionEffectLayer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10030;
+      opacity: 0;
+      overflow: hidden;
+    }
+    #directionEffectLayer .directionEffectRing {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: min(44vw, 340px);
+      height: min(44vw, 340px);
+      transform: translate(-50%, calc(-50% - 60px));
+      filter: drop-shadow(0 0 8px rgba(255,255,255,0.14));
+      opacity: 0;
+    }
+    #directionEffectLayer .directionEffectArrow {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 44px;
+      height: 44px;
+      margin-left: -22px;
+      margin-top: -22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 900;
+      color: rgba(255,255,255,0.26);
+      text-shadow: 0 0 5px rgba(255,255,255,0.10);
+      will-change: transform, opacity, filter;
+    }
     .settingsOverlay {
       position: fixed;
       inset: 0;
@@ -1073,6 +1132,9 @@
         </div>
       </section>
     </section>
+    <div class="selectionPromptLayer" id="selectionPromptLayer" aria-hidden="true">
+      <div class="selectionPromptText" id="selectionPromptText"></div>
+    </div>
     <div class="settingsOverlay hidden" id="appSettingsOverlay" aria-hidden="true">
     <section class="settingsModal" aria-label="設定画面">
       <div class="settingsModalHead">

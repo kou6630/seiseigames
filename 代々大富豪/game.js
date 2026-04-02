@@ -1,5 +1,6 @@
 import { createUI } from "./ui.js";
 import { onUserChanged } from "../shared/firebase.js";
+import { getUserData, updateUserData, useUserCoin, transferUserCoinByUid } from "../shared/userDate.js";
 import {
   nowMs,
   normalizeRoomSettings,
@@ -118,13 +119,19 @@ let ui = null;
 function renderMembersUI(list) {
   if (ui && typeof ui.renderMembers === "function") ui.renderMembers(list);
 }
+function getBetStatusText() {
+  if (currentGame && currentGame.betState && currentGame.betState.active) return "賭け試合有効";
+  return canStartBetMatch(currentMembers) ? "賭け試合有効" : "賭け試合無効";
+}
+function updateRulesTextWithBetStatus() {
+  if (!rulesText) return;
+  rulesText.textContent = buildRulesText(currentSettings) + " / " + getBetStatusText();
+}
 function renderRoomSettings(settings) {
   currentSettings = normalizeRoomSettings(settings);
   if (ui && typeof ui.renderRoomSettings === "function") ui.renderRoomSettings(currentSettings);
-  else {
-    rulesText.textContent = buildRulesText(currentSettings);
-    applySettingsInputs();
-  }
+  else applySettingsInputs();
+  updateRulesTextWithBetStatus();
 }
 function renderGame(game) {
   const previousGame = currentGame;
@@ -135,10 +142,14 @@ function renderGame(game) {
   }
   rememberReceivedCards(previousGame, currentGame);
   clearSelectionIfNeeded();
+  maybePlayOwnTurnSe(currentGame);
+  syncGameBgm(currentGame);
   if (ui && typeof ui.renderGame === "function") ui.renderGame(currentGame);
+  updateRulesTextWithBetStatus();
   renderReceivedCardEffects();
 }
 function setEntryMode() {
+  stopBgm();
   if (ui && typeof ui.setEntryMode === "function") ui.setEntryMode();
   else {
     document.body.classList.remove("inRoom");
@@ -147,6 +158,8 @@ function setEntryMode() {
   }
 }
 function setRoomMode() {
+  if (currentGame && currentGame.phase === "playing") syncGameBgm(currentGame);
+  else playLoopBgm("playing");
   if (ui && typeof ui.setRoomMode === "function") ui.setRoomMode();
   else {
     document.body.classList.add("inRoom");
@@ -202,17 +215,216 @@ const audioState = {
   seGain: null,
   started: false
 };
+const SE_AUDIO_PATHS = {
+  skipFive: "./audio/se/５飛ばし.ogg",
+  skill: "./audio/se/スキル.ogg",
+  revolution: "./audio/se/革命.ogg",
+  ownTurn: "./audio/se/自分のターン.ogg",
+  cut: "./audio/se/切り.ogg",
+  join: "./audio/se/入室.ogg",
+  lock: "./audio/se/縛り.ogg"
+};
+const BGM_AUDIO_PATHS = {
+  playing: "./audio/bgm/ゲームロビー.ogg",
+  revolution: "./audio/bgm/ゲームロビー（革命中）.m4a"
+};
 let currentAuthUser = null;
 let lastRuleEffectKey = "";
 let ruleEffectPlaying = false;
+let lastOwnTurnSeKey = "";
 let receivedCardEffectMap = new Map();
+let bgmAudio = null;
+let currentBgmKey = "";
 const RECEIVED_CARD_EFFECT_MS = 2200;
+const ROOM_EXPIRED_MESSAGE = "部屋の有効期限が切れました";
+let lastBetStartEffectKey = "";
+const BET_REQUIRED_COIN = 20;
+const BET_BIG_AMOUNT = 20;
+const BET_SMALL_AMOUNT = 10;
+const CPU_ACTION_DELAY_MS = 1000;
 
 function getRuleEffectLockUntilMs(effectNames) {
   const names = Array.isArray(effectNames)
     ? effectNames.filter(function(name) { return !!RULE_EFFECT_IMAGE_MAP[name]; })
     : [];
   return names.length ? nowMs() + (RULE_EFFECT_MS * names.length) : 0;
+}
+
+function getHumanRoomMembers(members) {
+  return (Array.isArray(members) ? members : []).filter(function(member) {
+    return member && !isCpuId(member.id);
+  });
+}
+
+function getRoomMemberAuthUid(member) {
+  if (!member || typeof member !== "object") return "";
+  return typeof member.authUid === "string" ? member.authUid.trim() : "";
+}
+
+function getRoomMemberCoin(member) {
+  if (!member || typeof member !== "object") return NaN;
+  const value = Number(member.coin);
+  return Number.isFinite(value) ? value : NaN;
+}
+
+function canStartBetMatch(members) {
+  const humans = getHumanRoomMembers(members);
+  if (humans.length < 4) return false;
+  return humans.every(function(member) {
+    return !!getRoomMemberAuthUid(member) && getRoomMemberCoin(member) >= BET_REQUIRED_COIN;
+  });
+}
+
+function buildBetTransfers(lastResult, members) {
+  if (!lastResult || !Array.isArray(lastResult.finishOrder) || !lastResult.finishOrder.length) return [];
+  const humans = getHumanRoomMembers(members);
+  if (humans.length < 4) return [];
+  const roleMap = getTradeRoleMap(lastResult, humans);
+  const byId = new Map(humans.map(function(member) { return [member.id, member]; }));
+  let daihugouId = "";
+  let hugouId = "";
+  let hinminId = "";
+  let daihinminId = "";
+
+  humans.forEach(function(member) {
+    const role = roleMap[member.id] || "";
+    if (role === "大富豪") daihugouId = member.id;
+    if (role === "富豪") hugouId = member.id;
+    if (role === "貧民") hinminId = member.id;
+    if (role === "大貧民") daihinminId = member.id;
+  });
+
+  const transfers = [];
+  if (daihinminId && daihugouId) {
+    const from = byId.get(daihinminId);
+    const to = byId.get(daihugouId);
+    if (from && to) {
+      transfers.push({
+        fromUid: getRoomMemberAuthUid(from),
+        toUid: getRoomMemberAuthUid(to),
+        amount: BET_BIG_AMOUNT,
+      });
+    }
+  }
+  if (hinminId && hugouId) {
+    const from = byId.get(hinminId);
+    const to = byId.get(hugouId);
+    if (from && to) {
+      transfers.push({
+        fromUid: getRoomMemberAuthUid(from),
+        toUid: getRoomMemberAuthUid(to),
+        amount: BET_SMALL_AMOUNT,
+      });
+    }
+  }
+
+  return transfers.filter(function(item) {
+    return item.fromUid && item.toUid && item.fromUid !== item.toUid && item.amount > 0;
+  });
+}
+
+async function applyBetSettlementIfNeeded(game, lastResult, members) {
+  if (!game || game.phase !== "finished") return;
+  if (!game.betState || !game.betState.active || game.betState.applied) return;
+  if (!currentAuthUser) return;
+
+  const transfers = buildBetTransfers(lastResult, members);
+  if (!transfers.length) return;
+
+  try {
+    for (const item of transfers) {
+      await transferUserCoinByUid(item.fromUid, item.toUid, item.amount, currentAuthUser);
+    }
+    await runRoomTransaction(function(roomData) {
+      if (!roomData || !roomData.gameData || !roomData.gameData.betState || !roomData.gameData.betState.active || roomData.gameData.betState.applied) {
+        return { ok: false };
+      }
+      roomData.gameData.betState.applied = true;
+      return { ok: true, room: roomData };
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function ensureBetStartEffectLayer() {
+  let layer = document.getElementById("betStartEffectLayer");
+  if (layer) return layer;
+  layer = document.createElement("div");
+  layer.id = "betStartEffectLayer";
+  layer.setAttribute("aria-hidden", "true");
+  layer.style.setProperty("position", "fixed", "important");
+  layer.style.setProperty("left", "0", "important");
+  layer.style.setProperty("top", "0", "important");
+  layer.style.setProperty("right", "0", "important");
+  layer.style.setProperty("bottom", "0", "important");
+  layer.style.setProperty("display", "flex", "important");
+  layer.style.setProperty("align-items", "center", "important");
+  layer.style.setProperty("justify-content", "center", "important");
+  layer.style.setProperty("padding", "24px", "important");
+  layer.style.setProperty("pointer-events", "none", "important");
+  layer.style.setProperty("opacity", "0", "important");
+  layer.style.setProperty("visibility", "hidden", "important");
+  layer.style.setProperty("z-index", "2147483647", "important");
+  document.documentElement.appendChild(layer);
+  return layer;
+}
+
+function playBetStartEffect(isActive) {
+  return new Promise(function(resolve) {
+    const layer = ensureBetStartEffectLayer();
+    layer.innerHTML = "";
+    layer.style.transition = "none";
+    layer.style.setProperty("opacity", "0", "important");
+    layer.style.setProperty("visibility", "visible", "important");
+    layer.style.setProperty("background", "rgba(0,0,0,0)", "important");
+    layer.setAttribute("aria-hidden", "false");
+
+    const box = document.createElement("div");
+    box.textContent = isActive ? "賭け試合有効！" : "賭け試合無効！";
+    box.style.setProperty("padding", "28px 36px", "important");
+    box.style.setProperty("border-radius", "28px", "important");
+    box.style.setProperty("border", "1px solid rgba(255,255,255,0.22)", "important");
+    box.style.setProperty("background", isActive
+      ? "linear-gradient(145deg, rgba(246,196,83,0.98), rgba(255,227,154,0.98))"
+      : "linear-gradient(145deg, rgba(120,130,156,0.98), rgba(214,221,235,0.98))", "important");
+    box.style.setProperty("color", isActive ? "#2d1800" : "#1b2230", "important");
+    box.style.setProperty("font-size", "clamp(40px, 8vw, 86px)", "important");
+    box.style.setProperty("font-weight", "900", "important");
+    box.style.setProperty("letter-spacing", "0.08em", "important");
+    box.style.setProperty("text-align", "center", "important");
+    box.style.setProperty("box-shadow", "0 24px 80px rgba(0,0,0,0.42)", "important");
+    box.style.setProperty("transform", "scale(0.88)", "important");
+    box.style.setProperty("opacity", "0", "important");
+    box.style.setProperty("transition", "transform 220ms ease, opacity 220ms ease", "important");
+    layer.appendChild(box);
+
+    void layer.offsetWidth;
+    requestAnimationFrame(function() {
+      layer.style.transition = "opacity 180ms ease, background 220ms ease";
+      layer.style.setProperty("opacity", "1", "important");
+      layer.style.setProperty("background", isActive ? "rgba(0,0,0,0.44)" : "rgba(8,12,22,0.52)", "important");
+      box.style.setProperty("opacity", "1", "important");
+      box.style.setProperty("transform", "scale(1)", "important");
+      window.setTimeout(function() {
+        layer.style.setProperty("opacity", "0", "important");
+        layer.style.setProperty("background", "rgba(0,0,0,0)", "important");
+        box.style.setProperty("opacity", "0", "important");
+        box.style.setProperty("transform", "scale(1.04)", "important");
+      }, 1600);
+      window.setTimeout(function() {
+        layer.innerHTML = "";
+        layer.style.setProperty("visibility", "hidden", "important");
+        layer.setAttribute("aria-hidden", "true");
+        resolve();
+      }, 1820);
+    });
+  });
+}
+
+async function showBetStartEffectForCurrentMembers() {
+  const isActive = canStartBetMatch(currentMembers);
+  await playBetStartEffect(isActive);
 }
 
 function normalize(value) {
@@ -259,43 +471,23 @@ function loadEntryFormFromLocal() {
     console.error(error);
   }
 }
-function getProfileStorageKey(user) {
-  return user && user.uid ? "seiseigames_profile_" + user.uid : "";
+function getNicknameFromUser(user, profile) {
+  const nickname = profile && typeof profile.nickname === "string" ? normalize(profile.nickname) : "";
+  if (nickname) return nickname;
+  return "";
 }
-function getStoredProfile(user) {
+async function getLiveProfile(user) {
   if (!user || !user.uid) return { nickname: "", coin: 0 };
   try {
-    const raw = localStorage.getItem(getProfileStorageKey(user));
-    if (!raw) return { nickname: "", coin: 0 };
-    const saved = JSON.parse(raw);
+    const data = await getUserData(user);
     return {
-      nickname: saved && typeof saved.nickname === "string" ? normalize(saved.nickname) : "",
-      coin: saved && Number.isFinite(saved.coin) ? Number(saved.coin) : 0
+      nickname: typeof data.nickname === "string" ? normalize(data.nickname) : "",
+      coin: Number.isFinite(Number(data.coin)) ? Number(data.coin) : 0
     };
   } catch (error) {
     console.error(error);
     return { nickname: "", coin: 0 };
   }
-}
-
-function getNicknameFromUser(user) {
-  if (!user || !user.uid) return "";
-  const profile = getStoredProfile(user);
-  return profile.nickname || normalize(user.displayName || "");
-}
-function saveStoredProfile(user, patch) {
-  if (!user || !user.uid) return { nickname: "", coin: 0 };
-  const current = getStoredProfile(user);
-  const nextProfile = {
-    nickname: typeof patch.nickname === "string" ? normalize(patch.nickname).slice(0, 20) : current.nickname,
-    coin: Number.isFinite(patch.coin) ? Math.max(0, Number(patch.coin)) : current.coin
-  };
-  try {
-    localStorage.setItem(getProfileStorageKey(user), JSON.stringify(nextProfile));
-  } catch (error) {
-    console.error(error);
-  }
-  return nextProfile;
 }
 function setAppSettingsMessage(text, isError) {
   if (!appSettingsMessage) return;
@@ -370,27 +562,77 @@ async function unlockAudio() {
 function applyAudioVolumes() {
   const volumes = getStoredVolumes();
   if (audioState.seGain) audioState.seGain.gain.value = volumes.se / 100;
+  if (bgmAudio) bgmAudio.volume = volumes.bgm / 100;
 }
 function playSeTone(kind) {
-  const context = ensureAudioContext();
-  if (!context || !audioState.started || !audioState.seGain) return;
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.type = kind === "action" ? "triangle" : "sine";
-  oscillator.frequency.setValueAtTime(kind === "action" ? 720 : 520, context.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(kind === "action" ? 420 : 680, context.currentTime + 0.08);
-  gain.gain.setValueAtTime(0.0001, context.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.22, context.currentTime + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.1);
-  oscillator.connect(gain);
-  gain.connect(audioState.seGain);
-  oscillator.start();
-  oscillator.stop(context.currentTime + 0.11);
+  const src = SE_AUDIO_PATHS[kind];
+  if (!src) return;
+  try {
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.volume = clampVolume(getStoredVolumes().se) / 100;
+    audio.currentTime = 0;
+    audio.play().catch(function(error) {
+      console.error(error);
+    });
+  } catch (error) {
+    console.error(error);
+  }
 }
+
+function stopBgm() {
+  currentBgmKey = "";
+  if (!bgmAudio) return;
+  try {
+    bgmAudio.pause();
+    bgmAudio.currentTime = 0;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function playLoopBgm(kind) {
+  const src = BGM_AUDIO_PATHS[kind];
+  if (!src) {
+    stopBgm();
+    return;
+  }
+  try {
+    if (!bgmAudio) {
+      bgmAudio = new Audio();
+      bgmAudio.preload = "auto";
+      bgmAudio.loop = true;
+    }
+    if (currentBgmKey !== kind || bgmAudio.src !== new URL(src, window.location.href).href) {
+      bgmAudio.src = src;
+      bgmAudio.currentTime = 0;
+      currentBgmKey = kind;
+    }
+    bgmAudio.volume = clampVolume(getStoredVolumes().bgm) / 100;
+    bgmAudio.play().catch(function(error) {
+      console.error(error);
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function syncGameBgm(game) {
+  if (game && game.phase === "playing") {
+    if (game && game.revolution) {
+      playLoopBgm("revolution");
+      return;
+    }
+    playLoopBgm("playing");
+    return;
+  }
+  stopBgm();
+}
+
 function openAppSettings() {
   if (!appSettingsOverlay) return;
   syncVolumeInputs();
-  if (settingsNicknameInput) settingsNicknameInput.value = normalize((loginInfoName && loginInfoName.textContent) || getNicknameFromUser(currentAuthUser) || "");
+  if (settingsNicknameInput) settingsNicknameInput.value = normalize((settingsNicknameInput && settingsNicknameInput.value) || playerNameInput.value || "");
   setAppSettingsMessage("", false);
   appSettingsOverlay.classList.remove("hidden");
   appSettingsOverlay.setAttribute("aria-hidden", "false");
@@ -400,25 +642,102 @@ function closeAppSettings() {
   appSettingsOverlay.classList.add("hidden");
   appSettingsOverlay.setAttribute("aria-hidden", "true");
   setAppSettingsMessage("", false);
+  applyAudioVolumes();
 }
-function playUiSe(kind) {
-  unlockAudio().then(function() {
-    playSeTone(kind || "ui");
-  }).catch(function(error) {
-    console.error(error);
+function playUiSe() {
+}
+
+function playRuleEffectSe(name) {
+  if (name === "5飛ばし") {
+    playSeTone("skipFive");
+    return;
+  }
+  if (name === "6リバース" || name === "7渡し" || name === "10捨て" || name === "Jバック") {
+    return;
+  }
+  if (name === "革命" || name === "階段革命") {
+    playSeTone("revolution");
+    return;
+  }
+  if (name === "8切" || name === "スペ3返し" || name === "99車") {
+    playSeTone("cut");
+    return;
+  }
+  if (name === "数字縛り" || name === "マーク縛り") {
+    playSeTone("lock");
+  }
+}
+
+function getOwnTurnSeKey(game) {
+  if (!game) return "";
+  if (game.phase === "playing") {
+    if (game.pendingSevenPass && game.pendingSevenPass.fromPlayerId === playerId) {
+      return [
+        "transfer",
+        game.pendingSevenPass.fromPlayerId || "",
+        game.pendingSevenPass.toPlayerId || "",
+        game.pendingSevenPass.count || 0,
+        game.currentTurnStartedAtMs || 0
+      ].join("__");
+    }
+    if (game.currentTurnPlayerId === playerId && !game.pendingClearField) {
+      return [
+        "play",
+        game.currentTurnPlayerId || "",
+        game.currentTurnStartedAtMs || 0
+      ].join("__");
+    }
+  }
+  if (game.phase === "trading") {
+    const ownPair = getTradePairForPlayer(game, playerId);
+    if (ownPair && !ownPair.done) {
+      return [
+        "trade",
+        ownPair.fromPlayerId || "",
+        ownPair.toPlayerId || "",
+        ownPair.count || 0,
+        game.tradeState && game.tradeState.startedAtMs || 0
+      ].join("__");
+    }
+  }
+  return "";
+}
+
+function maybePlayOwnTurnSe(game) {
+  const key = getOwnTurnSeKey(game);
+  if (!key) return;
+  if (key === lastOwnTurnSeKey) return;
+  lastOwnTurnSeKey = key;
+  playSeTone("ownTurn");
+}
+
+function getHumanMemberIdsFromRoomData(members) {
+  return Object.keys(members || {}).sort();
+}
+
+function maybePlayJoinSe(nextMembers) {
+  const previousIds = currentMembers.filter(function(member) {
+    return member && !isCpuId(member.id);
+  }).map(function(member) {
+    return member.id;
   });
+  const nextIds = getHumanMemberIdsFromRoomData(nextMembers);
+  if (nextIds.length > previousIds.length) {
+    playSeTone("join");
+  }
 }
-function applyLoggedInNickname(user) {
+
+async function applyLoggedInNickname(user) {
   currentAuthUser = user || null;
-  const profile = getStoredProfile(user);
-  const nickname = profile.nickname || getNicknameFromUser(user);
+  const profile = await getLiveProfile(user);
+  const nickname = getNicknameFromUser(user, profile);
   const coin = Number(profile.coin || 0);
   playerNameInput.value = nickname;
-  playerNameInput.readOnly = !!nickname;
-  playerNameInput.disabled = !!nickname;
-  playerNameInput.placeholder = nickname ? "ログイン中のニックネームを使用" : "名前";
+  playerNameInput.readOnly = true;
+  playerNameInput.disabled = true;
+  playerNameInput.placeholder = nickname ? "ログイン中のニックネームを使用" : "最初にニックネームを決めてください";
 
-  const displayName = nickname || normalize(user && user.displayName) || "---";
+  const displayName = nickname || "ニックネーム未設定";
   const displaySub = "コイン: " + coin;
   if (loginInfoName) loginInfoName.textContent = displayName;
   if (loginInfoSub) loginInfoSub.textContent = displaySub;
@@ -434,10 +753,17 @@ function applyLoggedInNickname(user) {
     roomLoginInfoPhoto.style.display = "block";
   }
 
-  if (settingsNicknameInput) settingsNicknameInput.value = displayName === "---" ? "" : displayName;
+  if (settingsNicknameInput) settingsNicknameInput.value = nickname;
+  if (user && !nickname) {
+    setAppSettingsMessage("最初にニックネームを決めてください", false);
+    openAppSettings();
+  }
   updateState();
 }
-function updateState() { joinButton.disabled = !(normalize(playerNameInput.value) && normalize(roomWordInput.value)); }
+function updateState() {
+  const hasNickname = !!normalize(playerNameInput.value);
+  joinButton.disabled = !(hasNickname && normalize(roomWordInput.value));
+}
 
 function ensureRuleEffectLayer() {
   let layer = document.getElementById("ruleEffectLayer");
@@ -526,6 +852,7 @@ async function maybePlayRuleEffects(game) {
   ruleEffectPlaying = true;
   try {
     for (const name of names) {
+      playRuleEffectSe(name);
       await playRuleEffectImage(RULE_EFFECT_IMAGE_MAP[name]);
     }
   } finally {
@@ -754,11 +1081,12 @@ const roomManager = createRoomManager({
   onRoomSnapshot: function(payload) {
     const data = payload && payload.data ? payload.data : {};
     roomWord = payload && payload.roomWord ? payload.roomWord : roomWord;
+    maybePlayJoinSe(data.members);
     currentLastResult = data.lastResult || null;
     renderMembers(data.members, data.settings);
     renderRoomSettings(data.settings);
     renderGame(data.gameData);
-    maybePlayRuleEffects(data.gameData);
+    maybePlayRuleEffects(data.gameData);    applyBetSettlementIfNeeded(data.gameData, data.lastResult || null, data.members);
     setRoomMode();
   },
   onJoinRoom: function(payload) {
@@ -769,8 +1097,11 @@ const roomManager = createRoomManager({
     setRoomMode();
   },
   onLeaveRoom: function() {
+    const expiredWhileInRoom = !!roomWord && !!currentMembers.length;
     roomWord = "";
     lastRuleEffectKey = "";
+    lastBetStartEffectKey = "";
+    lastOwnTurnSeKey = "";
     ruleEffectPlaying = false;
     currentMembers = [];
     currentGame = null;
@@ -782,6 +1113,7 @@ const roomManager = createRoomManager({
     clearEntryMessage();
     clearRoomMessage();
     setEntryMode();
+    if (expiredWhileInRoom) showEntryMessage(ROOM_EXPIRED_MESSAGE);
     renderRoomSettings(currentSettings);
   },
   onResetTransientState: function() {
@@ -867,7 +1199,7 @@ async function startGame() {
       turnOrder: turnOrder,
       currentTurnPlayerId: phase === "playing" ? firstTurnPlayerId : "",
       currentTurnStartedAtMs: phase === "playing" ? nowMs() : 0,
-      cpuActionAtMs: phase === "playing" && isCpuId(firstTurnPlayerId) ? nowMs() + 500 : 0,
+      cpuActionAtMs: phase === "playing" && isCpuId(firstTurnPlayerId) ? nowMs() + CPU_ACTION_DELAY_MS : 0,
       hands: hands,
       lastPlay: null,
       lastPlayPlayerId: "",
@@ -881,11 +1213,16 @@ async function startGame() {
       pendingClearField: null,
       resolvedField: null,
       tradeState: tradeState,
+      lastTradeResult: null,
       previousChampionId: roomData.lastResult && roomData.lastResult.topPlayerId ? roomData.lastResult.topPlayerId : "",
       miyakoDropped: false,
       turnTimeSeconds: settings.turnTimeSeconds,
       ruleSettings: settings,
       lastActionText: lastActionText,
+      betState: {
+        active: canStartBetMatch(roomData.members),
+        applied: false,
+      },
       ruleEffectState: null,
       pendingRuleEffectUntilMs: 0
     };
@@ -1047,6 +1384,7 @@ startGameButton.addEventListener("click", async function() {
   clearRoomMessage();
   startGameButton.disabled = true;
   try {
+    await showBetStartEffectForCurrentMembers();
     await startGame();
   } catch (error) {
     console.error(error);
@@ -1098,7 +1436,7 @@ if (bgmVolumeSlider) {
   });
 }
 if (saveNicknameButton) {
-  saveNicknameButton.addEventListener("click", function() {
+  saveNicknameButton.addEventListener("click", async function() {
     playUiSe("action");
     if (!currentAuthUser) {
       setAppSettingsMessage("ログイン後に変更できます", true);
@@ -1109,23 +1447,24 @@ if (saveNicknameButton) {
       setAppSettingsMessage("名前を入れてください", true);
       return;
     }
-    const profile = getStoredProfile(currentAuthUser);
-    const currentName = profile.nickname || getNicknameFromUser(currentAuthUser);
-    if (nextName === currentName) {
-      setAppSettingsMessage("同じ名前です", true);
-      return;
+    try {
+      const profile = await getLiveProfile(currentAuthUser);
+      const currentName = getNicknameFromUser(currentAuthUser, profile);
+      if (nextName === currentName) {
+        setAppSettingsMessage("同じ名前です", true);
+        return;
+      }
+      if (currentName) {
+        await useUserCoin(RENAME_COST_COIN, currentAuthUser);
+      }
+      await updateUserData({ nickname: nextName }, currentAuthUser);
+      await applyLoggedInNickname(currentAuthUser);
+      setAppSettingsMessage(currentName ? "名前を変更しました" : "ニックネームを登録しました", false);
+      if (!currentName) closeAppSettings();
+    } catch (error) {
+      console.error(error);
+      setAppSettingsMessage(error && error.message ? error.message : "変更に失敗しました", true);
     }
-    const nextCoin = Number(profile.coin || 0) - RENAME_COST_COIN;
-    if (nextCoin < 0) {
-      setAppSettingsMessage("コインが足りません", true);
-      return;
-    }
-    saveStoredProfile(currentAuthUser, {
-      nickname: nextName,
-      coin: nextCoin
-    });
-    applyLoggedInNickname(currentAuthUser);
-    setAppSettingsMessage("名前を変更しました", false);
   });
 }
 

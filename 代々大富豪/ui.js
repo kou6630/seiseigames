@@ -73,6 +73,47 @@ export function createUI(deps) {
   let cachedRoleStateKey = "";
   let cachedRoleMap = {};
   let lastRenderedRoleStateKey = "";
+  let selectionPromptTimer = null;
+  let lastDirectionEffectKey = "";
+
+  function getBetStatusText() {
+    const state = getState();
+    const game = state.currentGame;
+    if (game && game.betState && game.betState.active) return "賭け試合有効";
+    const humans = (Array.isArray(state.currentMembers) ? state.currentMembers : []).filter(function(member) {
+      return member && !member.isCpu;
+    });
+    const canBet = humans.length >= 4 && humans.every(function(member) {
+      return !!String(member.authUid || "").trim() && Number(member.coin) >= 20;
+    });
+    return canBet ? "賭け試合有効" : "賭け試合無効";
+  }
+
+  function updateRulesTextWithBetStatus() {
+    const state = getState();
+    if (!rulesText) return;
+    rulesText.textContent = buildRulesText(state.currentSettings) + " / " + getBetStatusText();
+  }
+
+  function getSeatFinishStampHtml(game, memberId, seatScale) {
+    const fallenPlayerIds = game && Array.isArray(game.fallenPlayerIds) ? game.fallenPlayerIds : [];
+    const isFoulAgari = fallenPlayerIds.includes(memberId);
+    const finishOrder = game && Array.isArray(game.finishOrder) ? game.finishOrder : [];
+    const rankIndex = finishOrder.indexOf(memberId);
+    if (rankIndex < 0) return "";
+    const stampText = isFoulAgari ? "反則上がり" : (String(rankIndex + 1) + "位");
+    const fontSize = isFoulAgari
+      ? Math.max(14, Math.round(22 * seatScale))
+      : Math.max(18, Math.round(30 * seatScale));
+    const paddingY = Math.max(4, Math.round(6 * seatScale));
+    const paddingX = isFoulAgari
+      ? Math.max(8, Math.round(10 * seatScale))
+      : Math.max(10, Math.round(14 * seatScale));
+    const borderColor = isFoulAgari ? "rgba(255,170,170,0.92)" : "rgba(255,235,170,0.88)";
+    const backgroundColor = isFoulAgari ? "rgba(120,20,20,0.42)" : "rgba(120,20,20,0.22)";
+    const textColor = isFoulAgari ? "rgba(255,235,235,0.98)" : "rgba(255,245,210,0.96)";
+    return '<div data-finish-stamp="1" style="position:absolute;left:50%;top:10px;transform:translateX(-50%) rotate(-12deg);padding:' + paddingY + 'px ' + paddingX + 'px;border:2px solid ' + borderColor + ';border-radius:999px;background:' + backgroundColor + ';color:' + textColor + ';font-size:' + fontSize + 'px;font-weight:900;letter-spacing:0.08em;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.28);box-shadow:0 4px 14px rgba(0,0,0,0.18);pointer-events:none;z-index:3;white-space:nowrap;">' + escapeHtml(stampText) + '</div>';
+  }
 
   const roleImageMap = {
     "大富豪": "img/main/大富豪.png",
@@ -210,6 +251,17 @@ export function createUI(deps) {
           : '<div data-hand-empty-label="1" style="min-height:28px;display:flex;justify-content:center;align-items:center;font-size:11px;opacity:0.56;">なし</div>';
         handArea.innerHTML = cardStackHtml;
       }
+
+      const liveSeatScale = Math.max(0.8, Number((seat.offsetWidth || 220) / 220) || 1);
+      const finishStampHtml = getSeatFinishStampHtml(state.currentGame, member.id, liveSeatScale);
+      const currentStamp = seat.querySelector('[data-finish-stamp="1"]');
+      if (finishStampHtml) {
+        if (currentStamp) currentStamp.outerHTML = finishStampHtml;
+        else seat.insertAdjacentHTML("afterbegin", finishStampHtml);
+      } else if (currentStamp) {
+        currentStamp.remove();
+      }
+
       if (!shouldUpdateRoleImage) return;
       const roleImageInfo = getSeatRoleImageInfo(member.id, roleMap, state.currentLastResult);
       const roleImage = seat.querySelector("[data-role-image]");
@@ -568,6 +620,181 @@ export function createUI(deps) {
     }
   }
 
+  function getTradeResultNotice(game) {
+  const state = getState();
+  const tradeResult = game && game.lastTradeResult && typeof game.lastTradeResult === "object" ? game.lastTradeResult : null;
+  const playerResult = tradeResult && tradeResult.players && tradeResult.players[state.playerId] ? tradeResult.players[state.playerId] : null;
+  if (!playerResult || !Array.isArray(playerResult.givenCards) || !playerResult.givenCards.length) return "";
+  const targetName = playerResult.toPlayerId ? getMemberName(playerResult.toPlayerId) : "相手";
+  return "あなたが " + targetName + " に渡したカード: " + playerResult.givenCards.map(function(card) {
+    return cardText(card);
+  }).join(" / ");
+}
+
+  function ensureSelectionPromptLayer() {
+    let layer = document.getElementById("selectionPromptLayer");
+    if (layer) return layer;
+    layer = document.createElement("div");
+    layer.id = "selectionPromptLayer";
+    layer.style.position = "fixed";
+    layer.style.inset = "0";
+    layer.style.display = "none";
+    layer.style.alignItems = "center";
+    layer.style.justifyContent = "center";
+    layer.style.pointerEvents = "none";
+    layer.style.zIndex = "10040";
+
+    const text = document.createElement("div");
+    text.id = "selectionPromptText";
+    text.style.padding = "18px 28px";
+    text.style.borderRadius = "22px";
+    text.style.background = "rgba(0,0,0,0.26)";
+    text.style.backdropFilter = "blur(8px)";
+    text.style.color = "#ffffff";
+    text.style.fontSize = "clamp(28px, 4.2vw, 52px)";
+    text.style.fontWeight = "900";
+    text.style.letterSpacing = "0.04em";
+    text.style.textAlign = "center";
+    text.style.textShadow = "0 6px 22px rgba(0,0,0,0.38)";
+    text.style.opacity = "0";
+    text.style.transition = "opacity 480ms ease";
+    text.style.whiteSpace = "nowrap";
+
+    layer.appendChild(text);
+    document.body.appendChild(layer);
+    return layer;
+  }
+
+  function updateSelectionPrompt(game) {
+    const layer = ensureSelectionPromptLayer();
+    const text = document.getElementById("selectionPromptText");
+    if (!layer || !text) return;
+    window.clearInterval(selectionPromptTimer);
+    selectionPromptTimer = null;
+
+    const state = getState();
+    let message = "";
+    if (game && game.phase === "trading") {
+      const pair = getTradePairForPlayer(game, state.playerId);
+      if (pair && !pair.done) {
+        message = "渡すカードを選んでください";
+      }
+    } else if (game && game.phase === "playing" && game.pendingSevenPass && game.pendingSevenPass.fromPlayerId === state.playerId) {
+      message = game.pendingSevenPass.mode === "tenDump"
+        ? "捨てるカードを選んでください"
+        : "渡すカードを選んでください";
+    }
+
+    if (!message) {
+      layer.classList.add("hidden");
+      layer.style.display = "none";
+      text.style.opacity = "0";
+      text.textContent = "";
+      return;
+    }
+
+    text.textContent = message;
+    layer.classList.remove("hidden");
+    layer.style.display = "flex";
+    let visible = false;
+    function tick() {
+      visible = !visible;
+      text.style.opacity = visible ? "1" : "0.18";
+    }
+    tick();
+    selectionPromptTimer = window.setInterval(tick, 1000);
+  }
+
+  function ensureDirectionEffectLayer() {
+    let layer = document.getElementById("directionEffectLayer");
+    if (layer) return layer;
+    layer = document.createElement("div");
+    layer.id = "directionEffectLayer";
+    layer.style.position = "fixed";
+    layer.style.inset = "0";
+    layer.style.pointerEvents = "none";
+    layer.style.zIndex = "10030";
+    layer.style.opacity = "0";
+    document.body.appendChild(layer);
+    return layer;
+  }
+
+  function playDirectionEffect(direction) {
+    const layer = ensureDirectionEffectLayer();
+    layer.innerHTML = "";
+    layer.style.opacity = "1";
+
+    const ring = document.createElement("div");
+    ring.style.position = "absolute";
+    ring.style.left = "50%";
+    ring.style.top = "50%";
+    ring.style.width = "min(44vw, 340px)";
+    ring.style.height = "min(44vw, 340px)";
+    ring.style.transform = "translate(-50%, calc(-50% - 60px))";
+    ring.style.filter = "drop-shadow(0 0 8px rgba(255,255,255,0.14))";
+    ring.style.opacity = "0";
+    layer.appendChild(ring);
+
+    const radius = 170;
+    const arrowCount = 6;
+    for (let index = 0; index < arrowCount; index += 1) {
+      const arrow = document.createElement("div");
+      const angle = ((Math.PI * 2) / arrowCount) * index;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      const deg = (angle * 180 / Math.PI) + (direction === -1 ? -90 : 90);
+      arrow.textContent = "➜";
+      arrow.style.position = "absolute";
+      arrow.style.left = "50%";
+      arrow.style.top = "50%";
+      arrow.style.width = "44px";
+      arrow.style.height = "44px";
+      arrow.style.marginLeft = "-22px";
+      arrow.style.marginTop = "-22px";
+      arrow.style.display = "flex";
+      arrow.style.alignItems = "center";
+      arrow.style.justifyContent = "center";
+      arrow.style.fontSize = "32px";
+      arrow.style.fontWeight = "900";
+      arrow.style.color = "rgba(255,255,255," + (0.18 + (index / arrowCount) * 0.12).toFixed(2) + ")";
+      arrow.style.transform = "translate(" + x.toFixed(1) + "px, " + y.toFixed(1) + "px) rotate(" + deg.toFixed(1) + "deg)";
+      arrow.style.filter = "drop-shadow(0 0 5px rgba(255,255,255,0.10))";
+      ring.appendChild(arrow);
+    }
+
+    ring.animate(
+      [
+        { transform: "translate(-50%, calc(-50% - 60px)) rotate(0deg)", opacity: 0 },
+        { transform: "translate(-50%, calc(-50% - 60px)) rotate(" + (direction === -1 ? -18 : 18) + "deg)", opacity: 0.26, offset: 0.2 },
+        { transform: "translate(-50%, calc(-50% - 60px)) rotate(" + (direction === -1 ? -36 : 36) + "deg)", opacity: 0, offset: 0.4 },
+        { transform: "translate(-50%, calc(-50% - 60px)) rotate(" + (direction === -1 ? -90 : 90) + "deg)", opacity: 0, offset: 1 }
+      ],
+      {
+        duration: 5000,
+        easing: "linear",
+        iterations: Infinity
+      }
+    );
+  }
+
+  function maybePlayDirectionEffect(game) {
+    const layer = ensureDirectionEffectLayer();
+    if (!game || game.phase !== "playing") {
+      layer.style.opacity = "0";
+      layer.innerHTML = "";
+      lastDirectionEffectKey = "";
+      return;
+    }
+    const key = [
+      game.phase || "",
+      game.direction,
+      getEffectiveRevolution(game) ? "rev" : "normal"
+    ].join("__");
+    if (key === lastDirectionEffectKey) return;
+    lastDirectionEffectKey = key;
+    playDirectionEffect(game.direction);
+  }
+
   function renderField(game) {
     const tableCenterEl = membersList.querySelector(".tableCenter");
     if (tableCenterEl) {
@@ -594,11 +821,13 @@ export function createUI(deps) {
       actionLogCache = [];
       lastRenderedActionText = "";
       lastPlayList.innerHTML = '<div class="fieldEmpty">まだ場札はありません</div>';
+      updateSelectionPrompt(null);
       updateCountdownLabel();
       return;
     }
 
     effectStatusLabel.textContent = buildEffectStatusText(game);
+    maybePlayDirectionEffect(game);
     lockStatusLabel.textContent = buildLockStatusText(game);
     const lockBadgeWrap = document.getElementById("lockBadgeWrap");
     if (lockBadgeWrap) lockBadgeWrap.innerHTML = buildLockBadgeHtml(game);
@@ -619,13 +848,23 @@ export function createUI(deps) {
       lastPlayList.innerHTML = '<div class="fieldEmpty">まだ場札はありません</div>';
     }
 
+    const tradeResultNotice = getTradeResultNotice(game);
+    if (tradeResultNotice) {
+      actionHintLabel.textContent = tradeResultNotice;
+      actionHintMirror.textContent = tradeResultNotice;
+      if (tradeResultNotice !== lastRenderedActionText) {
+        pushActionLog(tradeResultNotice);
+        lastRenderedActionText = tradeResultNotice;
+      }
+    }
+
     if (game.phase === "trading") {
       const state = getState();
       const pair = getTradePairForPlayer(game, state.playerId);
       if (pair && !pair.done) {
         actionHintLabel.textContent = pair.count + "枚選んで " + getMemberName(pair.toPlayerId) + " に渡してください";
       } else {
-        actionHintLabel.textContent = game.lastActionText || "交換中";
+        actionHintLabel.textContent = tradeResultNotice || game.lastActionText || "交換中";
       }
       actionHintMirror.textContent = actionHintLabel.textContent;
       if (actionHintLabel.textContent && actionHintLabel.textContent !== lastRenderedActionText) {
@@ -633,12 +872,16 @@ export function createUI(deps) {
         lastRenderedActionText = actionHintLabel.textContent;
       }
       renderActionLog();
+      updateSelectionPrompt(game);
       updateCountdownLabel();
       return;
     }
 
     if (game.phase === "finished") {
-      actionHintLabel.textContent = game.lastActionText || "順位が確定しました";
+      actionHintLabel.textContent = tradeResultNotice || game.lastActionText || "順位が確定しました";
+      actionHintMirror.textContent = actionHintLabel.textContent;
+    } else if (tradeResultNotice) {
+      actionHintLabel.textContent = tradeResultNotice;
       actionHintMirror.textContent = actionHintLabel.textContent;
     } else if (game.pendingSevenPass) {
       actionHintLabel.textContent = getMemberName(game.pendingSevenPass.fromPlayerId) + " が " + getMemberName(game.pendingSevenPass.toPlayerId) + " に " + game.pendingSevenPass.count + "枚渡します";
@@ -667,6 +910,7 @@ export function createUI(deps) {
       lastRenderedActionText = actionHintLabel.textContent;
     }
     renderActionLog();
+    updateSelectionPrompt(game);
     updateCountdownLabel();
   }
 
@@ -828,6 +1072,10 @@ export function createUI(deps) {
     startGameButton.disabled = !amHost || inGame || state.currentMembers.length < 2;
     if (!amHost || inGame || finished) settingsPanel.classList.add("hidden");
     updatePreStartLock();
+    if (!(state.currentGame && (state.currentGame.phase === "playing" || state.currentGame.phase === "trading"))) {
+      updateSelectionPrompt(null);
+    }
+    updateRulesTextWithBetStatus();
     updateSettingsViewMode();
   }
 
@@ -854,7 +1102,7 @@ export function createUI(deps) {
   function renderRoomSettings(settings) {
     const state = getState();
     state.currentSettings = normalizeRoomSettings(settings);
-    rulesText.textContent = buildRulesText(state.currentSettings);
+    updateRulesTextWithBetStatus();
     Array.from(settingsPanel.querySelectorAll(".settingItem[data-setting-target]"))
       .forEach(function(item) {
         const targetId = item.getAttribute("data-setting-target") || "";
@@ -890,7 +1138,7 @@ export function createUI(deps) {
     if (!list.length) {
       lastMembersLayoutKey = "";
       lastRenderedRoleStateKey = "";
-      membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="tableCenterTitle">TABLE CENTER</div><div class="tableCenterOwner" id="fieldOwnerLabel">場は空です</div><div class="fieldCards" id="lastPlayList"><div class="fieldEmpty">まだ場札はありません</div></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
+      membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="tableCenterTitle">TABLE CENTER</div><div class="tableCenterOwner" id="fieldOwnerLabel">場は空です</div><div class="fieldCards" id="lastPlayList"><div class="fieldEmpty">まだ場札はありません</div></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
       bindArenaElements();
       applyRoomScale();
       updateStartButton();
@@ -902,9 +1150,11 @@ export function createUI(deps) {
       updateSeatLiveState();
       applyRoomScale();
       renderActionLog();
+      updateRulesTextWithBetStatus();
       updateStartButton();
       return;
     }
+
     lastMembersLayoutKey = layoutKey;
     lastRenderedRoleStateKey = "";
     const roleMap = getCachedRoleMap(list, state.currentLastResult, state.currentGame);
@@ -953,7 +1203,6 @@ export function createUI(deps) {
       const x = Math.cos(angle) * radius;
       const y = Math.sin(angle) * radius;
       const isMe = member.id === state.playerId;
-      const isTurn = highlightedPlayerId === member.id;
       const handCount = state.currentGame && state.currentGame.phase !== "waiting" ? getCurrentHand(state.currentGame, member.id).length : 0;
       const roleImageInfo = getSeatRoleImageInfo(member.id, roleMap, state.currentLastResult);
       const seatClickable = isHostPlayer() && !isMe ? ' data-seat-menu="1"' : '';
@@ -975,8 +1224,10 @@ export function createUI(deps) {
         : '<div data-hand-empty-label="1" style="min-height:28px;display:flex;justify-content:center;align-items:center;font-size:11px;opacity:0.56;">なし</div>';
 
       const roleImageHtml = '<img data-role-image="1" src="' + escapeHtml(roleImageInfo.src || '') + '" alt="' + escapeHtml(roleImageInfo.label || '') + '" style="display:' + (roleImageInfo.src ? 'block' : 'none') + ';width:100%;height:100%;object-fit:fill;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.24));" />';
+      const finishStampHtml = getSeatFinishStampHtml(state.currentGame, member.id, seatScale);
 
-      return '<div class="seatCard' + (isMe ? ' isMe' : '') + '" data-player-id="' + escapeHtml(member.id) + '"' + seatClickable + ' style="--seat-x:' + x.toFixed(1) + 'px;--seat-y:' + y.toFixed(1) + 'px;width:' + seatWidth + 'px;height:' + seatHeight + 'px;padding:0;border-radius:0;border:' + seatBorder + 'px solid rgba(255,255,255,0.9);box-shadow:0 8px 18px rgba(0,0,0,0.26);background:rgba(0,0,0,0.28);overflow:hidden;">'
+      return '<div class="seatCard' + (isMe ? ' isMe' : '') + '" data-player-id="' + escapeHtml(member.id) + '"' + seatClickable + ' style="--seat-x:' + x.toFixed(1) + 'px;--seat-y:' + y.toFixed(1) + 'px;width:' + seatWidth + 'px;height:' + seatHeight + 'px;padding:0;border-radius:0;border:' + seatBorder + 'px solid rgba(255,255,255,0.9);box-shadow:0 8px 18px rgba(0,0,0,0.26);background:rgba(0,0,0,0.28);overflow:visible;">'
+        + finishStampHtml
         + '<div style="display:grid;grid-template-columns:' + avatarSize + 'px 1fr;grid-template-rows:' + nameHeight + 'px ' + roleHeight + 'px;height:' + seatTopHeight + 'px;border-bottom:' + seatBorder + 'px solid #000;background:rgba(0,0,0,0.28);">'
         + '<div style="grid-column:1;grid-row:1 / span 2;border-right:' + seatBorder + 'px solid #000;display:flex;align-items:center;justify-content:center;color:#f0f0f0;font-size:12px;font-weight:700;background:rgba(0,0,0,0.18);">&nbsp;</div>'
         + '<div style="grid-column:2;grid-row:1;border-bottom:' + seatBorder + 'px solid #000;display:flex;align-items:center;justify-content:center;padding:0 10px;color:#f5f5f5;font-size:' + seatNameFontSize + 'px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(0,0,0,0.18);">' + escapeHtml(member.name || '名無し') + '</div>'
@@ -986,13 +1237,14 @@ export function createUI(deps) {
         + '</div>'
         + '<div style="height:' + handHeight + 'px;padding:0 10px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);font-size:' + handFontSize + 'px;">' + cardStackHtml.replaceAll('width:16px', 'width:' + handStackWidth + 'px').replaceAll('height:22px', 'height:' + handStackHeight + 'px').replaceAll('margin-left:' + 0 + 'px', 'margin-left:0px').replaceAll('margin-left:-10px', 'margin-left:-' + handStackOverlap + 'px').replaceAll('font-size:12px', 'font-size:' + handFontSize + 'px') + '</div>'
         + '</div>';
-    }).join("");
+    }).join('');
 
     membersList.innerHTML = leftHtml + centerHtml + seatsHtml + '</div>' + rightHtml;
     bindArenaElements();
     updateSeatLiveState();
     applyRoomScale();
     renderActionLog();
+    updateRulesTextWithBetStatus();
     updateStartButton();
   }
 
@@ -1021,6 +1273,7 @@ export function createUI(deps) {
       if (Array.isArray(state.currentMembers) && state.currentMembers.length) renderMembers(state.currentMembers);
       renderMyHand([]);
       renderField(null);
+      updateRulesTextWithBetStatus();
       syncSideInfo();
       updateStartButton();
       return;
@@ -1031,6 +1284,7 @@ export function createUI(deps) {
       turnInfoLabel.textContent = "次ゲーム待ち";
       if (Array.isArray(state.currentMembers) && state.currentMembers.length) renderMembers(state.currentMembers);
       renderField(state.currentGame);
+      updateRulesTextWithBetStatus();
       syncSideInfo();
       renderMyHand(getCurrentHand(state.currentGame, state.playerId));
       updateStartButton();
@@ -1055,6 +1309,7 @@ export function createUI(deps) {
       : (getMemberName(state.currentGame.currentTurnPlayerId) + (state.currentGame.pendingSevenPass ? " / 7渡し中" : " / 手番"));
     if (Array.isArray(state.currentMembers) && state.currentMembers.length) renderMembers(state.currentMembers);
     renderField(state.currentGame);
+    updateRulesTextWithBetStatus();
     syncSideInfo();
     renderMyHand(getCurrentHand(state.currentGame, state.playerId));
     updateStartButton();
@@ -1079,10 +1334,11 @@ export function createUI(deps) {
     actionHintMirror.textContent = "開始待ち";
     lastAnimatedPlayKey = "";
     lastAnimatedTransferKey = "";
+    lastDirectionEffectKey = "";
     myHandCount.textContent = "0枚";
     myHandList.innerHTML = '<div class="handEmpty">ゲーム開始で手札が配られます</div>';
     lastPlayList.innerHTML = '<div class="fieldEmpty">まだ場札はありません</div>';
-    membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="tableCenterTitle">TABLE CENTER</div><div class="tableCenterOwner" id="fieldOwnerLabel">場は空です</div><div class="fieldCards" id="lastPlayList"><div class="fieldEmpty">まだ場札はありません</div></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
+    membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="tableCenterTitle">TABLE CENTER</div><div class="tableCenterOwner" id="fieldOwnerLabel">場は空です</div><div class="fieldCards" id="lastPlayList"><div class="fieldEmpty">まだ場札はありません</div></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
     bindArenaElements();
     settingsButton.classList.add("hidden");
     settingsPanel.classList.add("hidden");

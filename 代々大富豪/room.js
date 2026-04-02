@@ -1,4 +1,5 @@
-import { app } from "../shared/firebase.js";
+import { app, getCurrentUser } from "../shared/firebase.js";
+import { getUserData } from "../shared/userDate.js";
 import { getDatabase, ref, set, get, update, remove, onValue, onDisconnect, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
 export function normalizeRoomSettings(settings) {
@@ -68,7 +69,9 @@ export function toMemberList(members) {
       id: entry[0],
       name: entry[1] && entry[1].name ? entry[1].name : "",
       joinedAtMs: entry[1] && entry[1].joinedAtMs ? entry[1].joinedAtMs : 0,
-      isHost: !!(entry[1] && entry[1].isHost)
+      isHost: !!(entry[1] && entry[1].isHost),
+      authUid: entry[1] && entry[1].authUid ? entry[1].authUid : "",
+      coin: entry[1] && Number.isFinite(Number(entry[1].coin)) ? Number(entry[1].coin) : 0,
     };
   }).sort(function(a, b) {
     if (!!a.isHost !== !!b.isHost) return a.isHost ? -1 : 1;
@@ -147,8 +150,11 @@ export function createDefaultGameState(previousChampionId, settings) {
   };
 }
 
+const ROOM_EXPIRE_MS = 2 * 60 * 60 * 1000;
+
 export function createRoomManager(options) {
-  const {    playerId,
+  const {
+    playerId,
     getCurrentSettings,
     getCurrentGame,
     onRoomSnapshot,
@@ -200,6 +206,22 @@ export function createRoomManager(options) {
     return tx.snapshot.val() || {};
   }
 
+  function isExpiredRoomData(roomData) {
+    const createdAtMs = Number(roomData && roomData.createdAtMs) || 0;
+    const memberCount = Object.keys(roomData && roomData.members ? roomData.members : {}).length;
+    return !!createdAtMs && memberCount === 0 && (nowMs() - createdAtMs >= ROOM_EXPIRE_MS);
+  }
+
+  async function removeExpiredRoomIfNeeded(roomBaseRef, roomData) {
+    if (!isExpiredRoomData(roomData)) return false;
+    try {
+      await remove(roomBaseRef);
+    } catch (error) {
+      console.error(error);
+    }
+    return true;
+  }
+
   function syncHostFlag(humanList) {
     if (!roomId || !humanList.length) return;
     const currentHost = humanList.find(function(member) { return member.isHost; }) || humanList[0] || null;
@@ -218,17 +240,16 @@ export function createRoomManager(options) {
     }
   }
 
-  async function joinRoom(playerName, word) {
+  async function joinRoom(playerName, word, memberMeta) {
     roomWord = word;
     roomId = hashRoomWord(String(word || "").toLowerCase());
     const roomBaseRef = ref(db, roomPath + "/" + roomId);
-    memberRef = ref(db, roomPath + "/" + roomId + "/members/" + playerId);
-
-    const roomSnap = await get(roomBaseRef);
+    memberRef = ref(db, roomPath + "/" + roomId + "/members/" + playerId);    const roomSnap = await get(roomBaseRef);
     const roomData = roomSnap.val() || {};
-    const memberList = toMemberList(roomData.members);
-    const savedGame = roomData.gameData || null;
-    const roomSettings = normalizeRoomSettings(roomData.settings);
+    const expiredRemoved = await removeExpiredRoomIfNeeded(roomBaseRef, roomData);
+    const effectiveRoomData = expiredRemoved ? {} : roomData;
+    const memberList = toMemberList(effectiveRoomData.members);    const savedGame = effectiveRoomData.gameData || null;
+    const roomSettings = normalizeRoomSettings(effectiveRoomData.settings);
 
     if (savedGame && (savedGame.phase === "playing" || savedGame.phase === "trading") && memberList.length > 0) {
       throw new Error("この部屋はすでにゲーム中です");
@@ -248,30 +269,63 @@ export function createRoomManager(options) {
     } else if (!memberList.length) {
       await set(roomBaseRef, {
         kind: "daidai-daifugo",
-        createdAt: roomData.createdAt || serverTimestamp(),
-        createdAtMs: roomData.createdAtMs || nowMs(),
+        createdAt: effectiveRoomData.createdAt || serverTimestamp(),
+        createdAtMs: effectiveRoomData.createdAtMs || nowMs(),
         updatedAtMs: nowMs(),
         roomWord: word,
         gameStateVersion: 3,
-        settings: roomSettings,
-        gameData: createDefaultGameState(roomData.lastResult && roomData.lastResult.topPlayerId, roomSettings)
+        settings: roomSettings,        gameData: createDefaultGameState(effectiveRoomData.lastResult && effectiveRoomData.lastResult.topPlayerId, roomSettings)
       });
     } else {
       await update(roomBaseRef, { updatedAt: serverTimestamp(), updatedAtMs: nowMs() });
     }
 
+    let resolvedMeta = memberMeta && typeof memberMeta === "object" ? memberMeta : null;
+    if (!resolvedMeta) {
+      const authUser = getCurrentUser();
+      if (authUser) {
+        try {
+          const liveUserData = await getUserData(authUser);
+          resolvedMeta = {
+            authUid: authUser.uid || "",
+            coin: Number.isFinite(Number(liveUserData && liveUserData.coin)) ? Number(liveUserData.coin) : 0,
+          };
+        } catch (error) {
+          console.error(error);
+          resolvedMeta = {
+            authUid: authUser.uid || "",
+            coin: 0,
+          };
+        }
+      }
+    }
+    const safeMeta = resolvedMeta && typeof resolvedMeta === "object" ? resolvedMeta : {};
     const amHostPlayer = memberList.length === 0;
     onDisconnect(memberRef).remove();
     await set(memberRef, {
       name: playerName,
       isHost: amHostPlayer,
       joinedAt: serverTimestamp(),
-      joinedAtMs: nowMs()
+      joinedAtMs: nowMs(),
+      authUid: typeof safeMeta.authUid === "string" ? safeMeta.authUid : "",
+      coin: Number.isFinite(Number(safeMeta.coin)) ? Number(safeMeta.coin) : 0,
     });
 
     if (unwatchRoom) unwatchRoom();
     unwatchRoom = onValue(roomBaseRef, function(snapshot) {
       const data = snapshot.val() || {};
+      if (!snapshot.exists() || isExpiredRoomData(data)) {
+        if (unwatchRoom) {
+          unwatchRoom();
+          unwatchRoom = null;
+        }
+        memberRef = null;
+        roomId = "";
+        roomWord = "";
+        if (typeof onResetTransientState === "function") onResetTransientState();
+        if (typeof onLeaveRoom === "function") onLeaveRoom();
+        return;
+      }
       roomWord = data.roomWord || roomWord;
       const humans = toMemberList(data.members);
       syncHostFlag(humans);

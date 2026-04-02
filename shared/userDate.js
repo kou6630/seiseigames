@@ -54,7 +54,9 @@ function normalizeUserData(uid, data = {}) {
     photoURL: data.photoURL || "",
     selectedAvatarImage: data.selectedAvatarImage || data.photoURL || "",
     coin: Number.isFinite(data.coin) ? data.coin : DEFAULT_COIN,
-    nickname: typeof data.nickname === "string" ? data.nickname : DEFAULT_NICKNAME,
+    nickname: typeof data.nickname === "string"
+      ? data.nickname.trim().replace(/\s+/g, " ").slice(0, 20)
+      : DEFAULT_NICKNAME,
     selectedAvatar,
     ownedAvatars,
     isAdmin: Boolean(data.isAdmin),
@@ -113,7 +115,15 @@ export async function ensureUserData(user = getCurrentUser()) {
     updatedAt: merged.updatedAt,
   });
 
-  return normalizeUserData(currentUser.uid, existing);
+  return normalizeUserData(currentUser.uid, {
+    ...existing,
+    name: merged.name,
+    email: merged.email,
+    photoURL: merged.photoURL,
+    selectedAvatarImage: merged.selectedAvatarImage,
+    nickname: merged.nickname,
+    isAdmin: merged.isAdmin,
+  });
 }
 
 export async function getUserData(user = getCurrentUser()) {
@@ -298,6 +308,72 @@ export async function useUserCoinByUid(targetUid, amount, user = getCurrentUser(
     ...targetData,
     coin: nextCoin,
   });
+}
+
+export async function transferUserCoinByUid(fromUid, toUid, amount, user = getCurrentUser()) {
+  const currentUser = requireUser(user);
+  const currentData = await getUserData(currentUser);
+
+  if (!currentData.isAdmin) {
+    throw new Error("権限がありません");
+  }
+
+  const from = String(fromUid || "").trim();
+  const to = String(toUid || "").trim();
+  const value = Math.max(0, Number(amount || 0));
+
+  if (!from || !to) {
+    throw new Error("対象ユーザーが必要です");
+  }
+  if (from === to || !value) {
+    return null;
+  }
+
+  const fromRef = getUserRef(from);
+  const toRef = getUserRef(to);
+  const [fromSnapshot, toSnapshot] = await Promise.all([
+    getDoc(fromRef),
+    getDoc(toRef),
+  ]);
+
+  if (!fromSnapshot.exists() || !toSnapshot.exists()) {
+    throw new Error("対象ユーザーが見つかりません");
+  }
+
+  const fromData = normalizeUserData(from, fromSnapshot.data() || {});
+  const toData = normalizeUserData(to, toSnapshot.data() || {});
+  const safeAmount = Math.min(Math.max(0, Number(fromData.coin || 0)), value);
+
+  if (!safeAmount) {
+    return {
+      from: fromData,
+      to: toData,
+      amount: 0,
+    };
+  }
+
+  await Promise.all([
+    updateDoc(fromRef, {
+      coin: Math.max(0, Number(fromData.coin || 0) - safeAmount),
+      updatedAt: serverTimestamp(),
+    }),
+    updateDoc(toRef, {
+      coin: Math.max(0, Number(toData.coin || 0) + safeAmount),
+      updatedAt: serverTimestamp(),
+    }),
+  ]);
+
+  return {
+    from: normalizeUserData(from, {
+      ...fromData,
+      coin: Math.max(0, Number(fromData.coin || 0) - safeAmount),
+    }),
+    to: normalizeUserData(to, {
+      ...toData,
+      coin: Math.max(0, Number(toData.coin || 0) + safeAmount),
+    }),
+    amount: safeAmount,
+  };
 }
 
 export { db, USERS_COLLECTION, DEFAULT_COIN, DEFAULT_AVATAR, DEFAULT_NICKNAME };

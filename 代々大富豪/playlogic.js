@@ -493,23 +493,68 @@ export function chooseAutoCards(hand, game, settings) {
     return { cards: cards, check: validatePlaySelection(cards, game, settings) };
   }).filter(function(item) { return item.check.ok; });
   if (!candidates.length) return null;
+
   const reversed = getEffectiveRevolution(game);
   const foulAgariEnabled = !!(settings && settings.foulAgariEnabled);
+  const handSize = Array.isArray(hand) ? hand.length : 0;
+  const isOpening = !(game && game.lastPlay);
+
   candidates.sort(function(a, b) {
-    const aRemain = Math.max(0, (hand || []).length - a.cards.length);
-    const bRemain = Math.max(0, (hand || []).length - b.cards.length);
+    const aRemain = Math.max(0, handSize - a.cards.length);
+    const bRemain = Math.max(0, handSize - b.cards.length);
     const aForbiddenFinish = aRemain === 0 && isForbiddenAgariCards(a.cards, reversed, foulAgariEnabled);
     const bForbiddenFinish = bRemain === 0 && isForbiddenAgariCards(b.cards, reversed, foulAgariEnabled);
     if (aForbiddenFinish !== bForbiddenFinish) return aForbiddenFinish ? 1 : -1;
-    if (a.check.play.length !== b.check.play.length) return a.check.play.length - b.check.play.length;
-    const aStrength = getPlayStrengthScore(a.check.play.comparePower, reversed);
-    const bStrength = getPlayStrengthScore(b.check.play.comparePower, reversed);
-    if (aStrength !== bStrength) return aStrength - bStrength;
+
+    const aFinish = aRemain === 0;
+    const bFinish = bRemain === 0;
+    if (aFinish !== bFinish) return aFinish ? -1 : 1;
+
+    const aPlay = a.check.play;
+    const bPlay = b.check.play;
+    const aStrength = getPlayStrengthScore(aPlay.comparePower, reversed);
+    const bStrength = getPlayStrengthScore(bPlay.comparePower, reversed);
     const aJokers = a.cards.filter(function(card) { return card.rank === "JOKER"; }).length;
     const bJokers = b.cards.filter(function(card) { return card.rank === "JOKER"; }).length;
+    const aIsRevolution = (aPlay.type === "group" && aPlay.length >= 4) || (aPlay.type === "stairs" && aPlay.length >= 4);
+    const bIsRevolution = (bPlay.type === "group" && bPlay.length >= 4) || (bPlay.type === "stairs" && bPlay.length >= 4);
+    const aIsStairs = aPlay.type === "stairs";
+    const bIsStairs = bPlay.type === "stairs";
+
+    if (isOpening && handSize >= 6) {
+      if (aIsRevolution !== bIsRevolution) return aIsRevolution ? -1 : 1;
+      if (aPlay.length !== bPlay.length) return bPlay.length - aPlay.length;
+      if (aIsStairs !== bIsStairs) return aIsStairs ? -1 : 1;
+      if (aJokers !== bJokers) return aJokers - bJokers;
+      if (aStrength !== bStrength) return aStrength - bStrength;
+      return aRemain - bRemain;
+    }
+
+    if (handSize >= 8) {
+      if (aIsRevolution !== bIsRevolution) return aIsRevolution ? -1 : 1;
+      if (aPlay.length !== bPlay.length) return bPlay.length - aPlay.length;
+      if (aIsStairs !== bIsStairs) return aIsStairs ? -1 : 1;
+      if (aJokers !== bJokers) return aJokers - bJokers;
+      if (aStrength !== bStrength) return aStrength - bStrength;
+      return aRemain - bRemain;
+    }
+
+    if (handSize >= 5) {
+      if (aRemain !== bRemain) return aRemain - bRemain;
+      if (aPlay.length !== bPlay.length) return bPlay.length - aPlay.length;
+      if (aIsStairs !== bIsStairs) return aIsStairs ? -1 : 1;
+      if (aJokers !== bJokers) return aJokers - bJokers;
+      if (aStrength !== bStrength) return aStrength - bStrength;
+      return 0;
+    }
+
+    if (aRemain !== bRemain) return aRemain - bRemain;
+    if (aStrength !== bStrength) return aStrength - bStrength;
+    if (aPlay.length !== bPlay.length) return bPlay.length - aPlay.length;
     if (aJokers !== bJokers) return aJokers - bJokers;
-    return a.cards.length - b.cards.length;
+    return 0;
   });
+
   return candidates[0].cards;
 }
 
@@ -517,12 +562,13 @@ function insertFinishOrder(game, targetId, isFoul) {
   if (!Array.isArray(game.finishOrder)) game.finishOrder = [];
   const currentOrder = game.finishOrder.filter(function(id) { return id !== targetId; });
   const fallen = new Set(Array.isArray(game.fallenPlayerIds) ? game.fallenPlayerIds : []);
+  const safeIndex = currentOrder.findIndex(function(id) { return fallen.has(id); });
   if (isFoul) {
-    currentOrder.push(targetId);
+    if (safeIndex < 0) currentOrder.push(targetId);
+    else currentOrder.splice(safeIndex, 0, targetId);
     game.finishOrder = currentOrder;
     return;
   }
-  const safeIndex = currentOrder.findIndex(function(id) { return fallen.has(id); });
   if (safeIndex < 0) currentOrder.push(targetId);
   else currentOrder.splice(safeIndex, 0, targetId);
   game.finishOrder = currentOrder;
@@ -582,7 +628,7 @@ export function clearField(game, leaderId, nowMs, isCpuId) {
   game.ruleEffectState = null;
   game.currentTurnPlayerId = leaderId || "";
   game.currentTurnStartedAtMs = nowMs();
-  game.cpuActionAtMs = isCpuId(game.currentTurnPlayerId) ? nowMs() + 500 : 0;
+  game.cpuActionAtMs = isCpuId(game.currentTurnPlayerId) ? nowMs() + 1000 : 0;
 }
 
 export function beginEightCutDelay(game, leaderId, actionText, nowMs, delayMs) {
@@ -598,7 +644,7 @@ export function beginEightCutDelay(game, leaderId, actionText, nowMs, delayMs) {
 export function advanceTurn(game, fromId, extraSteps, skipIds, nowMs, isCpuId) {
   game.currentTurnPlayerId = getNextActivePlayer(game.turnOrder, game.finishOrder, fromId, game.direction, skipIds || [], Math.max(1, 1 + (extraSteps || 0))) || "";
   game.currentTurnStartedAtMs = nowMs();
-  game.cpuActionAtMs = isCpuId(game.currentTurnPlayerId) ? nowMs() + 500 : 0;
+  game.cpuActionAtMs = isCpuId(game.currentTurnPlayerId) ? nowMs() + 1000 : 0;
 }
 
 export function getFiveSkipExtraSteps(fiveCount) {
@@ -646,17 +692,34 @@ export function createMutatePlay(deps) {
         pair.selectedGiveCards = hand.filter(function(card) { return autoIds.includes(card.id); });
         pair.done = true;
       });
+      const tradeResultMap = {};
       tradeState.pairs.forEach(function(pair) {
         const giveIds = pair.selectedGiveCards.map(function(card) { return card.id; });
         const giveCards = getCurrentHand(game, pair.fromPlayerId).filter(function(card) { return giveIds.includes(card.id); });
         game.hands[pair.fromPlayerId] = sortHandCards(removeCardsByIds(getCurrentHand(game, pair.fromPlayerId), giveIds).concat(pair.forcedReturnCards || []));
         game.hands[pair.toPlayerId] = sortHandCards(getCurrentHand(game, pair.toPlayerId).concat(giveCards));
+        tradeResultMap[pair.fromPlayerId] = {
+          toPlayerId: pair.toPlayerId,
+          givenCards: giveCards.slice(),
+          receivedCards: (pair.forcedReturnCards || []).slice(),
+          count: pair.count
+        };
+        tradeResultMap[pair.toPlayerId] = {
+          fromPlayerId: pair.fromPlayerId,
+          receivedCards: giveCards.slice(),
+          returnedCards: (pair.forcedReturnCards || []).slice(),
+          count: pair.count
+        };
       });
+      game.lastTradeResult = {
+        finishedAtMs: nowMs(),
+        players: tradeResultMap
+      };
       game.tradeState = null;
       game.phase = "playing";
       game.currentTurnPlayerId = game.turnOrder[0] || "";
       game.currentTurnStartedAtMs = nowMs();
-      game.cpuActionAtMs = isCpuId(game.currentTurnPlayerId) ? nowMs() + 500 : 0;
+      game.cpuActionAtMs = isCpuId(game.currentTurnPlayerId) ? nowMs() + 1000 : 0;
       game.lastActionText = "カード交換完了";
       game.ruleEffectState = null;
       roomData.gameData = game;
@@ -765,11 +828,11 @@ export function createMutatePlay(deps) {
         game.hands[actorId] = sortHandCards(removeCardsByIds(fromHand, safeCardIds));
         game.pendingSevenPass = null;
         let miyakoDroppedPlayerId = "";
-        const foulFinish = false;
+        const foulFinish = !game.hands[actorId].length && isForbiddenAgariCards((game.lastPlay && game.lastPlay.cards) || [], getEffectiveRevolution(game), settings.foulAgariEnabled);
         if (!game.hands[actorId].length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings, foulFinish);
         const lastResult = maybeFinishGame(roomData, game, nowMs);
         if (lastResult) {
-          game.lastActionText = getMemberName(actorId, members) + " が10捨てを完了して上がりました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
+          game.lastActionText = getMemberName(actorId, members) + (foulFinish ? " が10捨てを完了しました / 反則上がり" : " が10捨てを完了して上がりました") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
           game.ruleEffectState = null;
           roomData.lastResult = lastResult;
           roomData.gameData = game;
@@ -808,11 +871,11 @@ export function createMutatePlay(deps) {
       } : null;
       game.pendingSevenPass = null;
       let miyakoDroppedPlayerId = "";
-      const foulFinish = false;
+      const foulFinish = !game.hands[actorId].length && isForbiddenAgariCards((game.lastPlay && game.lastPlay.cards) || [], getEffectiveRevolution(game), settings.foulAgariEnabled);
       if (!game.hands[actorId].length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings, foulFinish);
       const lastResult = maybeFinishGame(roomData, game, nowMs);
       if (lastResult) {
-        game.lastActionText = getMemberName(actorId, members) + " が渡し終えて上がりました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
+        game.lastActionText = getMemberName(actorId, members) + (foulFinish ? " が渡し終えました / 反則上がり" : " が渡し終えて上がりました") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
         game.ruleEffectState = null;
         roomData.lastResult = lastResult;
         roomData.gameData = game;
@@ -949,7 +1012,7 @@ export function createMutatePlay(deps) {
       };
       game.currentTurnPlayerId = actorId;
       game.currentTurnStartedAtMs = nowMs();
-      game.cpuActionAtMs = isCpuId(actorId) ? nowMs() + 500 : 0;
+      game.cpuActionAtMs = isCpuId(actorId) ? nowMs() + 1000 : 0;
       game.lastActionText = getMemberName(actorId, members) + " が 10捨てを発動" + (messageParts.length ? " / " + messageParts.join(" / ") : "");
       game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, nowMs);
       game.pendingRuleEffectUntilMs = getRuleEffectLockUntilMs(messageParts);
@@ -968,7 +1031,7 @@ export function createMutatePlay(deps) {
       };
       game.currentTurnPlayerId = actorId;
       game.currentTurnStartedAtMs = nowMs();
-      game.cpuActionAtMs = isCpuId(actorId) ? nowMs() + 500 : 0;
+      game.cpuActionAtMs = isCpuId(actorId) ? nowMs() + 1000 : 0;
       game.lastActionText = getMemberName(actorId, members) + " が 7渡しを発動" + (messageParts.length ? " / " + messageParts.join(" / ") : "");
       game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, nowMs);
       game.pendingRuleEffectUntilMs = getRuleEffectLockUntilMs(messageParts);

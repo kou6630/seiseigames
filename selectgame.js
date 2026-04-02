@@ -3,6 +3,10 @@ import {
   signOutUser,
   onUserChanged,
 } from "./shared/firebase.js";
+import {
+  getUserData,
+  updateUserData,
+} from "./shared/userDate.js";
 
 const statusDot = document.getElementById("statusDot");
 const statusText = document.getElementById("statusText");
@@ -88,6 +92,10 @@ function openAdminScreen() {
   }
 }
 
+async function getAdminDataModule() {
+  return import("./shared/userDate.js");
+}
+
 function closeAdminScreen() {
   if (stopOnlineUsersSubscription) {
     stopOnlineUsersSubscription();
@@ -159,9 +167,26 @@ async function loadAdminUsers() {
   }
   adminUsers = [];
   if (adminUserList) {
-    adminUserList.innerHTML = '<div class="admin-empty">通信を使わない設定のため、オンライン一覧は停止中です。</div>';
+    adminUserList.innerHTML = '<div class="admin-empty">読み込み中です。</div>';
   }
-  setAdminStatus("一覧取得は停止中です。");
+  setAdminStatus("");
+
+  const adminModule = await getAdminDataModule();
+  const getAllUsersData = adminModule && typeof adminModule.getAllUsersData === "function"
+    ? adminModule.getAllUsersData
+    : null;
+
+  if (!getAllUsersData) {
+    if (adminUserList) {
+      adminUserList.innerHTML = '<div class="admin-empty">一覧取得の接続に失敗しました。</div>';
+    }
+    setAdminStatus("一覧取得の接続に失敗しました。");
+    return;
+  }
+
+  const list = await getAllUsersData(currentUser);
+  adminUsers = Array.isArray(list) ? list : [];
+  renderAdminUsers(adminSearchInput ? adminSearchInput.value : "");
 }
 
 async function applyAdminCoin(mode) {
@@ -175,40 +200,65 @@ async function applyAdminCoin(mode) {
     setAdminStatus("コイン数を入力してください。");
     return;
   }
-  setAdminStatus("通信を止めているため、コイン操作は停止中です。");
-}
 
-function getProfileStorageKey(user) {
-  return `seiseigames_profile_${user.uid}`;
-}
+  const adminModule = await getAdminDataModule();
+  const addUserCoinByUid = adminModule && typeof adminModule.addUserCoinByUid === "function"
+    ? adminModule.addUserCoinByUid
+    : null;
+  const useUserCoinByUid = adminModule && typeof adminModule.useUserCoinByUid === "function"
+    ? adminModule.useUserCoinByUid
+    : null;
 
-function loadStoredProfile(user) {
-  try {
-    const raw = localStorage.getItem(getProfileStorageKey(user));
-    if (!raw) {
-      return { nickname: "", coin: 0, isAdmin: isAdminAccount(user) };
-    }
-    const data = JSON.parse(raw);
-    return {
-      nickname: typeof data.nickname === "string" ? data.nickname : "",
-      coin: Number.isFinite(data.coin) ? data.coin : 0,
-      isAdmin: typeof data.isAdmin === "boolean" ? data.isAdmin : isAdminAccount(user),
+  if ((mode === "add" && !addUserCoinByUid) || (mode !== "add" && !useUserCoinByUid)) {
+    setAdminStatus("コイン操作の接続に失敗しました。");
+    return;
+  }
+
+  setAdminStatus("更新中です。");
+
+  const updated = mode === "add"
+    ? await addUserCoinByUid(adminSelectedUid, amount, currentUser)
+    : await useUserCoinByUid(adminSelectedUid, amount, currentUser);
+
+  adminUsers = adminUsers.map((user) => user.uid === updated.uid ? updated : user);
+  renderAdminUsers(adminSearchInput ? adminSearchInput.value : "");
+
+  if (adminSelectedUser) {
+    adminSelectedUser.textContent = `${updated.nickname || updated.name || "名前なし"} / ${updated.email || "オンライン中"} / ${Number.isFinite(Number(updated.coin)) ? `コイン: ${Number(updated.coin)}` : "オンライン中"}`;
+  }
+
+  if (currentUser && updated.uid === currentUser.uid) {
+    currentProfile = {
+      ...(currentProfile || {}),
+      ...updated,
+      isAdmin: true,
     };
+    applyProfileToGameSelect(currentProfile, currentUser);
+  }
+
+  if (adminCoinInput) adminCoinInput.value = "";
+  setAdminStatus(mode === "add" ? "コインを付与しました。" : "コインを没収しました。");
+}
+
+async function loadProfile(user) {
+  try {
+    const data = await getUserData(user);
+    currentProfile = data;
+    isAdminUser = Boolean(data && data.isAdmin) || isAdminAccount(user);
+    applyProfileToGameSelect(data, user);
+    return data;
   } catch (error) {
     console.error(error);
-    return { nickname: "", coin: 0, isAdmin: isAdminAccount(user) };
+    const fallback = {
+      nickname: "",
+      coin: 0,
+      isAdmin: isAdminAccount(user),
+    };
+    currentProfile = fallback;
+    isAdminUser = fallback.isAdmin;
+    applyProfileToGameSelect(fallback, user);
+    return fallback;
   }
-}
-
-function saveStoredProfile(user, partialData = {}) {
-  const current = loadStoredProfile(user);
-  const next = {
-    ...current,
-    ...partialData,
-    isAdmin: isAdminAccount(user),
-  };
-  localStorage.setItem(getProfileStorageKey(user), JSON.stringify(next));
-  return next;
 }
 
 function openNicknameModal(defaultValue = "") {
@@ -226,7 +276,7 @@ function closeNicknameModal() {
 }
 
 function applyProfileToGameSelect(profile, user) {
-  const nickname = profile && profile.nickname ? profile.nickname : getFallbackNickname(user);
+  const nickname = profile && profile.nickname ? profile.nickname : "ニックネーム未設定";
   const coin = Number((profile && profile.coin) || 0);
 
   if (userName) {
@@ -243,31 +293,14 @@ function applyProfileToGameSelect(profile, user) {
   }
 }
 
-async function loadProfile(user) {
-  const data = loadStoredProfile(user);
-  currentProfile = data;
-  isAdminUser = Boolean(data.isAdmin) || isAdminAccount(user);
-  applyProfileToGameSelect(data, user);
-  return data;
-}
+
 
 async function ensureNicknameBeforeOpen() {
   if (!currentUser) return false;
   const data = await loadProfile(currentUser);
   const nickname = sanitizeNickname((data && data.nickname) || "");
   if (nickname) return true;
-
-  const fallbackName = getFallbackNickname(currentUser);
-  if (fallbackName) {
-    applyProfileToGameSelect({
-      ...(currentProfile || {}),
-      nickname: fallbackName,
-      coin: currentProfile && Number.isFinite(Number(currentProfile.coin)) ? Number(currentProfile.coin) : 0,
-    }, currentUser);
-    return true;
-  }
-
-  openNicknameModal(currentUser.displayName || "");
+  openNicknameModal("");
   return false;
 }
 
@@ -450,7 +483,7 @@ if (nicknameSaveBtn) {
     if (nicknameError) nicknameError.textContent = "";
 
     try {
-      saveStoredProfile(currentUser, { nickname });
+      await updateUserData({ nickname }, currentUser);
       await loadProfile(currentUser);
       closeNicknameModal();
       openGameSelectScreen();
