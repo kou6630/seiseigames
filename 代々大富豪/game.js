@@ -323,6 +323,23 @@ function buildBetTransfers(lastResult, members) {
   });
 }
 
+function applyTransfersToRoomMembers(members, transfers) {
+  const nextMembers = members && typeof members === "object" ? members : {};
+  const safeTransfers = Array.isArray(transfers) ? transfers : [];
+  safeTransfers.forEach(function(item) {
+    const amount = Number(item && item.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    Object.keys(nextMembers).forEach(function(memberId) {
+      const member = nextMembers[memberId];
+      if (!member || typeof member !== "object") return;
+      const authUid = getRoomMemberAuthUid(member);
+      const currentCoin = Number.isFinite(Number(member.coin)) ? Number(member.coin) : 0;
+      if (authUid && authUid === item.fromUid) member.coin = currentCoin - amount;
+      if (authUid && authUid === item.toUid) member.coin = (Number.isFinite(Number(member.coin)) ? Number(member.coin) : currentCoin) + amount;
+    });
+  });
+}
+
 async function applyBetSettlementIfNeeded(game, lastResult, members) {
   if (!game || game.phase !== "finished") return;
   if (!game.betState || !game.betState.active || game.betState.applied) return;
@@ -335,13 +352,18 @@ async function applyBetSettlementIfNeeded(game, lastResult, members) {
     for (const item of transfers) {
       await transferUserCoinByUid(item.fromUid, item.toUid, item.amount, currentAuthUser);
     }
-    await runRoomTransaction(function(roomData) {
+    const updatedRoom = await runRoomTransaction(function(roomData) {
       if (!roomData || !roomData.gameData || !roomData.gameData.betState || !roomData.gameData.betState.active || roomData.gameData.betState.applied) {
         return { ok: false };
       }
+      applyTransfersToRoomMembers(roomData.members, transfers);
       roomData.gameData.betState.applied = true;
       return { ok: true, room: roomData };
     });
+    if (updatedRoom && updatedRoom.members) {
+      renderMembers(updatedRoom.members, updatedRoom.settings || currentSettings);
+      updateRulesTextWithBetStatus();
+    }
   } catch (error) {
     console.error(error);
   }
@@ -1126,7 +1148,23 @@ async function runRoomTransaction(mutator) {
 }
 
 async function joinRoom(playerName, word) {
-  return roomManager.joinRoom(playerName, word);
+  let memberMeta = null;
+  if (currentAuthUser) {
+    try {
+      const liveUserData = await getUserData(currentAuthUser);
+      memberMeta = {
+        authUid: currentAuthUser.uid || "",
+        coin: Number.isFinite(Number(liveUserData && liveUserData.coin)) ? Number(liveUserData.coin) : 0,
+      };
+    } catch (error) {
+      console.error(error);
+      memberMeta = {
+        authUid: currentAuthUser.uid || "",
+        coin: 0,
+      };
+    }
+  }
+  return roomManager.joinRoom(playerName, word, memberMeta);
 }
 
 async function startGame() {

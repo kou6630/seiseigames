@@ -311,12 +311,7 @@ export async function useUserCoinByUid(targetUid, amount, user = getCurrentUser(
 }
 
 export async function transferUserCoinByUid(fromUid, toUid, amount, user = getCurrentUser()) {
-  const currentUser = requireUser(user);
-  const currentData = await getUserData(currentUser);
-
-  if (!currentData.isAdmin) {
-    throw new Error("権限がありません");
-  }
+  requireUser(user);
 
   const from = String(fromUid || "").trim();
   const to = String(toUid || "").trim();

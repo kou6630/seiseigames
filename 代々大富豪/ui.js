@@ -95,23 +95,42 @@ export function createUI(deps) {
     rulesText.textContent = buildRulesText(state.currentSettings) + " / " + getBetStatusText();
   }
 
-  function getSeatFinishStampHtml(game, memberId, seatScale) {
+  function getSeatFinishStampHtml(game, lastResult, memberId, seatScale) {
     const fallenPlayerIds = game && Array.isArray(game.fallenPlayerIds) ? game.fallenPlayerIds : [];
-    const isFoulAgari = fallenPlayerIds.includes(memberId);
     const finishOrder = game && Array.isArray(game.finishOrder) ? game.finishOrder : [];
     const rankIndex = finishOrder.indexOf(memberId);
-    if (rankIndex < 0) return "";
-    const stampText = isFoulAgari ? "反則上がり" : (String(rankIndex + 1) + "位");
-    const fontSize = isFoulAgari
-      ? Math.max(14, Math.round(22 * seatScale))
-      : Math.max(18, Math.round(30 * seatScale));
+    const currentMiyakoDropped = !!(game && game.miyakoDroppedPlayerId && game.miyakoDroppedPlayerId === memberId);
+    const lastResultMiyakoDropped = !!(lastResult && lastResult.miyakoOchiPlayerId && lastResult.miyakoOchiPlayerId === memberId && (!game || game.phase === "waiting" || game.phase === "finished"));
+    const isMiyakoDropped = currentMiyakoDropped || lastResultMiyakoDropped;
+    const isFoulAgari = fallenPlayerIds.includes(memberId);
+    if (rankIndex < 0 && !isMiyakoDropped) return "";
+    const stampText = isMiyakoDropped ? "都落ち" : (isFoulAgari ? "反則上がり" : (String(rankIndex + 1) + "位"));
+    const fontSize = isMiyakoDropped
+      ? Math.max(16, Math.round(24 * seatScale))
+      : isFoulAgari
+        ? Math.max(14, Math.round(22 * seatScale))
+        : Math.max(18, Math.round(30 * seatScale));
     const paddingY = Math.max(4, Math.round(6 * seatScale));
-    const paddingX = isFoulAgari
-      ? Math.max(8, Math.round(10 * seatScale))
-      : Math.max(10, Math.round(14 * seatScale));
-    const borderColor = isFoulAgari ? "rgba(255,170,170,0.92)" : "rgba(255,235,170,0.88)";
-    const backgroundColor = isFoulAgari ? "rgba(120,20,20,0.42)" : "rgba(120,20,20,0.22)";
-    const textColor = isFoulAgari ? "rgba(255,235,235,0.98)" : "rgba(255,245,210,0.96)";
+    const paddingX = isMiyakoDropped
+      ? Math.max(10, Math.round(14 * seatScale))
+      : isFoulAgari
+        ? Math.max(8, Math.round(10 * seatScale))
+        : Math.max(10, Math.round(14 * seatScale));
+    const borderColor = isMiyakoDropped
+      ? "rgba(255,210,120,0.95)"
+      : isFoulAgari
+        ? "rgba(255,170,170,0.92)"
+        : "rgba(255,235,170,0.88)";
+    const backgroundColor = isMiyakoDropped
+      ? "rgba(110,40,10,0.48)"
+      : isFoulAgari
+        ? "rgba(120,20,20,0.42)"
+        : "rgba(120,20,20,0.22)";
+    const textColor = isMiyakoDropped
+      ? "rgba(255,244,210,0.98)"
+      : isFoulAgari
+        ? "rgba(255,235,235,0.98)"
+        : "rgba(255,245,210,0.96)";
     return '<div data-finish-stamp="1" style="position:absolute;left:50%;top:10px;transform:translateX(-50%) rotate(-12deg);padding:' + paddingY + 'px ' + paddingX + 'px;border:2px solid ' + borderColor + ';border-radius:999px;background:' + backgroundColor + ';color:' + textColor + ';font-size:' + fontSize + 'px;font-weight:900;letter-spacing:0.08em;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.28);box-shadow:0 4px 14px rgba(0,0,0,0.18);pointer-events:none;z-index:3;white-space:nowrap;">' + escapeHtml(stampText) + '</div>';
   }
 
@@ -231,6 +250,11 @@ export function createUI(deps) {
       if (!seat) return;
       applySeatTurnVisual(seat, highlightedPlayerId === member.id);
       seat.classList.toggle("isMe", member.id === state.playerId);
+      const coinLabel = seat.querySelector('[data-coin-label="1"]');
+      if (coinLabel) {
+        const coinValue = Number.isFinite(Number(member.coin)) ? Number(member.coin) : 0;
+        coinLabel.textContent = coinValue + "コイン";
+      }
       const handCount = state.currentGame && state.currentGame.phase !== "waiting" ? getCurrentHand(state.currentGame, member.id).length : 0;
       const handArea = seat.lastElementChild;
       if (handArea) {
@@ -253,7 +277,7 @@ export function createUI(deps) {
       }
 
       const liveSeatScale = Math.max(0.8, Number((seat.offsetWidth || 220) / 220) || 1);
-      const finishStampHtml = getSeatFinishStampHtml(state.currentGame, member.id, liveSeatScale);
+      const finishStampHtml = getSeatFinishStampHtml(state.currentGame, state.currentLastResult, member.id, liveSeatScale);
       const currentStamp = seat.querySelector('[data-finish-stamp="1"]');
       if (finishStampHtml) {
         if (currentStamp) currentStamp.outerHTML = finishStampHtml;
@@ -1224,9 +1248,13 @@ export function createUI(deps) {
         : '<div data-hand-empty-label="1" style="min-height:28px;display:flex;justify-content:center;align-items:center;font-size:11px;opacity:0.56;">なし</div>';
 
       const roleImageHtml = '<img data-role-image="1" src="' + escapeHtml(roleImageInfo.src || '') + '" alt="' + escapeHtml(roleImageInfo.label || '') + '" style="display:' + (roleImageInfo.src ? 'block' : 'none') + ';width:100%;height:100%;object-fit:fill;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.24));" />';
-      const finishStampHtml = getSeatFinishStampHtml(state.currentGame, member.id, seatScale);
+      const finishStampHtml = getSeatFinishStampHtml(state.currentGame, state.currentLastResult, member.id, seatScale);
+
+      const coinValue = Number.isFinite(Number(member.coin)) ? Number(member.coin) : 0;
+      const coinHtml = '<div data-coin-label="1" style="position:absolute;left:50%;top:-34px;transform:translateX(-50%);padding:4px 12px;border-radius:999px;border:1px solid rgba(255,220,120,0.42);background:rgba(35,24,8,0.92);color:#ffe8a8;font-size:' + Math.max(11, Math.round(13 * seatScale)) + 'px;font-weight:900;letter-spacing:0.04em;line-height:1;white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,0.22);pointer-events:none;z-index:4;">' + escapeHtml(String(coinValue) + 'コイン') + '</div>';
 
       return '<div class="seatCard' + (isMe ? ' isMe' : '') + '" data-player-id="' + escapeHtml(member.id) + '"' + seatClickable + ' style="--seat-x:' + x.toFixed(1) + 'px;--seat-y:' + y.toFixed(1) + 'px;width:' + seatWidth + 'px;height:' + seatHeight + 'px;padding:0;border-radius:0;border:' + seatBorder + 'px solid rgba(255,255,255,0.9);box-shadow:0 8px 18px rgba(0,0,0,0.26);background:rgba(0,0,0,0.28);overflow:visible;">'
+        + coinHtml
         + finishStampHtml
         + '<div style="display:grid;grid-template-columns:' + avatarSize + 'px 1fr;grid-template-rows:' + nameHeight + 'px ' + roleHeight + 'px;height:' + seatTopHeight + 'px;border-bottom:' + seatBorder + 'px solid #000;background:rgba(0,0,0,0.28);">'
         + '<div style="grid-column:1;grid-row:1 / span 2;border-right:' + seatBorder + 'px solid #000;display:flex;align-items:center;justify-content:center;color:#f0f0f0;font-size:12px;font-weight:700;background:rgba(0,0,0,0.18);">&nbsp;</div>'
@@ -1376,6 +1404,13 @@ export function createUI(deps) {
     if (!seatActionMenu) return;
     if (seatActionMenu.contains(event.target)) return;
     closeSeatActionMenu();
+  });
+
+  window.addEventListener("click", function(event) {
+    const target = event.target;
+    if (target && target.id === "appSettingsOverlay") {
+      closeSeatActionMenu();
+    }
   });
 
   window.addEventListener("resize", closeSeatActionMenu);

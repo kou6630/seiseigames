@@ -170,6 +170,8 @@ export function createRoomManager(options) {
   let roomWord = "";
   let memberRef = null;
   let unwatchRoom = null;
+  let syncingOwnMemberCoin = false;
+  let lastSyncedOwnCoin = null;
 
   function getRoomBaseRef() {
     if (!roomId) throw new Error("部屋に入っていません");
@@ -240,15 +242,46 @@ export function createRoomManager(options) {
     }
   }
 
+  async function syncOwnMemberCoinIfNeeded() {
+    if (!roomId || !playerId || syncingOwnMemberCoin) return;
+    const authUser = getCurrentUser();
+    if (!authUser) return;
+    syncingOwnMemberCoin = true;
+    try {
+      const liveUserData = await getUserData(authUser);
+      const nextCoin = Number.isFinite(Number(liveUserData && liveUserData.coin)) ? Number(liveUserData.coin) : 0;
+      if (lastSyncedOwnCoin === nextCoin) return;
+      const ownMemberRef = ref(db, roomPath + "/" + roomId + "/members/" + playerId);
+      const ownMemberSnap = await get(ownMemberRef);
+      const ownMemberData = ownMemberSnap.val() || {};
+      const currentCoin = Number.isFinite(Number(ownMemberData.coin)) ? Number(ownMemberData.coin) : 0;
+      if (currentCoin === nextCoin) {
+        lastSyncedOwnCoin = nextCoin;
+        return;
+      }
+      await update(ownMemberRef, {
+        coin: nextCoin,
+        updatedAtMs: nowMs(),
+      });
+      lastSyncedOwnCoin = nextCoin;
+    } catch (error) {
+      console.error(error);
+    } finally {
+      syncingOwnMemberCoin = false;
+    }
+  }
+
   async function joinRoom(playerName, word, memberMeta) {
     roomWord = word;
     roomId = hashRoomWord(String(word || "").toLowerCase());
     const roomBaseRef = ref(db, roomPath + "/" + roomId);
-    memberRef = ref(db, roomPath + "/" + roomId + "/members/" + playerId);    const roomSnap = await get(roomBaseRef);
+    memberRef = ref(db, roomPath + "/" + roomId + "/members/" + playerId);
+    const roomSnap = await get(roomBaseRef);
     const roomData = roomSnap.val() || {};
     const expiredRemoved = await removeExpiredRoomIfNeeded(roomBaseRef, roomData);
     const effectiveRoomData = expiredRemoved ? {} : roomData;
-    const memberList = toMemberList(effectiveRoomData.members);    const savedGame = effectiveRoomData.gameData || null;
+    const memberList = toMemberList(effectiveRoomData.members);
+    const savedGame = effectiveRoomData.gameData || null;
     const roomSettings = normalizeRoomSettings(effectiveRoomData.settings);
 
     if (savedGame && (savedGame.phase === "playing" || savedGame.phase === "trading") && memberList.length > 0) {
@@ -274,7 +307,8 @@ export function createRoomManager(options) {
         updatedAtMs: nowMs(),
         roomWord: word,
         gameStateVersion: 3,
-        settings: roomSettings,        gameData: createDefaultGameState(effectiveRoomData.lastResult && effectiveRoomData.lastResult.topPlayerId, roomSettings)
+        settings: roomSettings,
+        gameData: createDefaultGameState(effectiveRoomData.lastResult && effectiveRoomData.lastResult.topPlayerId, roomSettings)
       });
     } else {
       await update(roomBaseRef, { updatedAt: serverTimestamp(), updatedAtMs: nowMs() });
@@ -310,6 +344,7 @@ export function createRoomManager(options) {
       authUid: typeof safeMeta.authUid === "string" ? safeMeta.authUid : "",
       coin: Number.isFinite(Number(safeMeta.coin)) ? Number(safeMeta.coin) : 0,
     });
+    lastSyncedOwnCoin = Number.isFinite(Number(safeMeta.coin)) ? Number(safeMeta.coin) : 0;
 
     if (unwatchRoom) unwatchRoom();
     unwatchRoom = onValue(roomBaseRef, function(snapshot) {
@@ -322,6 +357,7 @@ export function createRoomManager(options) {
         memberRef = null;
         roomId = "";
         roomWord = "";
+        lastSyncedOwnCoin = null;
         if (typeof onResetTransientState === "function") onResetTransientState();
         if (typeof onLeaveRoom === "function") onLeaveRoom();
         return;
@@ -329,6 +365,7 @@ export function createRoomManager(options) {
       roomWord = data.roomWord || roomWord;
       const humans = toMemberList(data.members);
       syncHostFlag(humans);
+      syncOwnMemberCoinIfNeeded();
       if (typeof onRoomSnapshot === "function") {
         onRoomSnapshot({
           roomId,
@@ -420,6 +457,7 @@ export function createRoomManager(options) {
 
     roomId = "";
     roomWord = "";
+    lastSyncedOwnCoin = null;
     if (typeof onResetTransientState === "function") onResetTransientState();
     if (typeof onLeaveRoom === "function") onLeaveRoom();
   }

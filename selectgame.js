@@ -40,12 +40,21 @@ const adminAddCoinBtn = document.getElementById("adminAddCoinBtn");
 const adminRemoveCoinBtn = document.getElementById("adminRemoveCoinBtn");
 const adminStatus = document.getElementById("adminStatus");
 
+const SELECTGAME_VOLUME_STORAGE_KEY = "selectgame_bgm_volume_v1";
+
 let currentUser = null;
 let currentProfile = null;
 let isAdminUser = false;
 let adminUsers = [];
 let adminSelectedUid = "";
 let stopOnlineUsersSubscription = null;
+let selectgameBgmAudio = null;
+let selectgameAudioUnlocked = false;
+let selectgameSettingsButton = null;
+let selectgameSettingsOverlay = null;
+let selectgameVolumeSlider = null;
+let selectgameVolumeValue = null;
+const SELECTGAME_BGM_PATH = "./audio/bgm/seiseigame.wav";
 
 const ADMIN_EMAILS = ["takoponnsama6630@gmail.com"];
 
@@ -73,6 +82,246 @@ function getFallbackNickname(user) {
 function isAdminAccount(user) {
   if (!user) return false;
   return ADMIN_EMAILS.includes(String(user.email || "").toLowerCase());
+}
+
+function clampSelectgameVolume(value) {
+  if (!Number.isFinite(Number(value))) return 100;
+  return Math.max(0, Math.min(100, Number(value)));
+}
+
+function getStoredSelectgameVolume() {
+  try {
+    const raw = localStorage.getItem(SELECTGAME_VOLUME_STORAGE_KEY);
+    return clampSelectgameVolume(raw == null ? 100 : Number(raw));
+  } catch (error) {
+    console.error(error);
+    return 100;
+  }
+}
+
+function saveStoredSelectgameVolume(value) {
+  const safeValue = clampSelectgameVolume(value);
+  try {
+    localStorage.setItem(SELECTGAME_VOLUME_STORAGE_KEY, String(safeValue));
+  } catch (error) {
+    console.error(error);
+  }
+  return safeValue;
+}
+
+function applySelectgameBgmVolume() {
+  if (!selectgameBgmAudio) return;
+  selectgameBgmAudio.volume = getStoredSelectgameVolume() / 100;
+}
+
+function ensureSelectgameBgm() {
+  if (selectgameBgmAudio) return selectgameBgmAudio;
+  try {
+    const audio = new Audio(SELECTGAME_BGM_PATH);
+    audio.loop = true;
+    audio.preload = "auto";
+    audio.playsInline = true;
+    selectgameBgmAudio = audio;
+    applySelectgameBgmVolume();
+  } catch (error) {
+    console.error(error);
+  }
+  return selectgameBgmAudio;
+}
+
+function primeSelectgameBgmFromGesture() {
+  const audio = ensureSelectgameBgm();
+  if (!audio || selectgameAudioUnlocked) return;
+  try {
+    applySelectgameBgmVolume();
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.then === "function") {
+      playPromise.then(function() {
+        selectgameAudioUnlocked = true;
+        audio.pause();
+        audio.currentTime = 0;
+      }).catch(function(error) {
+        console.error(error);
+      });
+      return;
+    }
+    selectgameAudioUnlocked = true;
+    audio.pause();
+    audio.currentTime = 0;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function ensureSelectgameSettingsUi() {
+  if (selectgameSettingsOverlay && selectgameSettingsButton) return;
+  if (!gameSelectScreen) return;
+
+  if (!selectgameSettingsButton) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "音量";
+    button.style.position = "absolute";
+    button.style.top = "18px";
+    button.style.right = "18px";
+    button.style.width = "88px";
+    button.style.height = "42px";
+    button.style.border = "1px solid rgba(255,255,255,0.14)";
+    button.style.borderRadius = "12px";
+    button.style.background = "rgba(20,16,36,0.82)";
+    button.style.color = "#f8f5ff";
+    button.style.fontSize = "14px";
+    button.style.fontWeight = "900";
+    button.style.zIndex = "3";
+    button.addEventListener("click", function(event) {
+      event.stopPropagation();
+      openSelectgameSettings();
+    });
+    gameSelectScreen.appendChild(button);
+    selectgameSettingsButton = button;
+  }
+
+  if (!selectgameSettingsOverlay) {
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.display = "none";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.padding = "20px";
+    overlay.style.background = "rgba(3,6,16,0.62)";
+    overlay.style.backdropFilter = "blur(10px)";
+    overlay.style.zIndex = "20";
+
+    const modal = document.createElement("div");
+    modal.style.width = "min(100%, 420px)";
+    modal.style.padding = "20px";
+    modal.style.borderRadius = "22px";
+    modal.style.border = "1px solid rgba(255,255,255,0.12)";
+    modal.style.background = "rgba(18,10,36,0.96)";
+    modal.style.boxShadow = "0 26px 80px rgba(0,0,0,0.42)";
+
+    const title = document.createElement("div");
+    title.textContent = "ゲームセレクト音量";
+    title.style.fontSize = "20px";
+    title.style.fontWeight = "900";
+    title.style.color = "#f8f5ff";
+    title.style.marginBottom = "14px";
+
+    const row = document.createElement("div");
+    row.style.display = "grid";
+    row.style.gap = "8px";
+
+    const labelRow = document.createElement("div");
+    labelRow.style.display = "flex";
+    labelRow.style.alignItems = "center";
+    labelRow.style.justifyContent = "space-between";
+    labelRow.style.gap = "8px";
+
+    const label = document.createElement("div");
+    label.textContent = "BGM";
+    label.style.fontSize = "14px";
+    label.style.fontWeight = "800";
+    label.style.color = "#f8f5ff";
+
+    const value = document.createElement("div");
+    value.style.fontSize = "13px";
+    value.style.color = "rgba(248,245,255,0.78)";
+
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "100";
+    slider.step = "1";
+    slider.style.width = "100%";
+    slider.addEventListener("input", function() {
+      const safeValue = saveStoredSelectgameVolume(slider.value);
+      value.textContent = String(safeValue);
+      applySelectgameBgmVolume();
+    });
+
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.textContent = "閉じる";
+    closeButton.style.width = "100%";
+    closeButton.style.height = "46px";
+    closeButton.style.marginTop = "16px";
+    closeButton.style.border = "1px solid rgba(255,255,255,0.14)";
+    closeButton.style.borderRadius = "14px";
+    closeButton.style.background = "rgba(255,255,255,0.08)";
+    closeButton.style.color = "#f8f5ff";
+    closeButton.style.fontSize = "15px";
+    closeButton.style.fontWeight = "900";
+    closeButton.addEventListener("click", function() {
+      closeSelectgameSettings();
+    });
+
+    labelRow.appendChild(label);
+    labelRow.appendChild(value);
+    row.appendChild(labelRow);
+    row.appendChild(slider);
+    modal.appendChild(title);
+    modal.appendChild(row);
+    modal.appendChild(closeButton);
+    overlay.appendChild(modal);
+    overlay.addEventListener("click", function(event) {
+      if (event.target === overlay) closeSelectgameSettings();
+    });
+    document.body.appendChild(overlay);
+    selectgameSettingsOverlay = overlay;
+    selectgameVolumeSlider = slider;
+    selectgameVolumeValue = value;
+  }
+}
+
+function openSelectgameSettings() {
+  ensureSelectgameSettingsUi();
+  if (!selectgameSettingsOverlay) return;
+  const currentVolume = getStoredSelectgameVolume();
+  if (selectgameVolumeSlider) selectgameVolumeSlider.value = String(currentVolume);
+  if (selectgameVolumeValue) selectgameVolumeValue.textContent = String(currentVolume);
+  selectgameSettingsOverlay.style.display = "flex";
+}
+
+function closeSelectgameSettings() {
+  if (!selectgameSettingsOverlay) return;
+  selectgameSettingsOverlay.style.display = "none";
+}
+
+function syncSelectgameSettingsVisibility() {
+  ensureSelectgameSettingsUi();
+  if (!selectgameSettingsButton) return;
+  const open = !!(gameSelectScreen && gameSelectScreen.classList.contains("show"));
+  selectgameSettingsButton.style.display = open ? "inline-flex" : "none";
+  selectgameSettingsButton.style.alignItems = "center";
+  selectgameSettingsButton.style.justifyContent = "center";
+  if (!open) closeSelectgameSettings();
+}
+
+function playSelectgameBgm() {
+  const audio = ensureSelectgameBgm();
+  if (!audio) return;
+  try {
+    applySelectgameBgmVolume();
+    if (!audio.paused) return;
+    audio.play().then(function() {
+      selectgameAudioUnlocked = true;
+    }).catch(function(error) {
+      console.error(error);
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function stopSelectgameBgm() {
+  if (!selectgameBgmAudio) return;
+  try {
+    selectgameBgmAudio.pause();
+    selectgameBgmAudio.currentTime = 0;
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 function setAdminEntryVisible(visible) {
@@ -293,8 +542,6 @@ function applyProfileToGameSelect(profile, user) {
   }
 }
 
-
-
 async function ensureNicknameBeforeOpen() {
   if (!currentUser) return false;
   const data = await loadProfile(currentUser);
@@ -308,12 +555,16 @@ function openGameSelectScreen() {
   if (gameSelectScreen) {
     gameSelectScreen.classList.add("show");
   }
+  syncSelectgameSettingsVisibility();
+  playSelectgameBgm();
 }
 
 function closeGameSelectScreen() {
   if (gameSelectScreen) {
     gameSelectScreen.classList.remove("show");
   }
+  syncSelectgameSettingsVisibility();
+  stopSelectgameBgm();
 }
 
 function updateLoggedOutView() {
@@ -393,13 +644,18 @@ if (gameSelectCard) {
   gameSelectCard.addEventListener("click", async () => {
     if (gameSelectCard.classList.contains("locked")) return;
     setMessage("");
+    primeSelectgameBgmFromGesture();
     try {
       const canOpen = await ensureNicknameBeforeOpen();
-      if (!canOpen) return;
+      if (!canOpen) {
+        stopSelectgameBgm();
+        return;
+      }
       closeAdminScreen();
       openGameSelectScreen();
     } catch (error) {
       console.error(error);
+      stopSelectgameBgm();
       setMessage("読み込みに失敗しました。");
     }
   });
@@ -495,6 +751,22 @@ if (nicknameSaveBtn) {
     }
   });
 }
+
+document.addEventListener("visibilitychange", function() {
+  if (document.hidden) {
+    stopSelectgameBgm();
+    return;
+  }
+  if (gameSelectScreen && gameSelectScreen.classList.contains("show")) {
+    playSelectgameBgm();
+  }
+});
+
+window.addEventListener("beforeunload", function() {
+  stopSelectgameBgm();
+});
+
+syncSelectgameSettingsVisibility();
 
 onUserChanged(async (user) => {
   setMessage("");
