@@ -272,17 +272,6 @@ export function createRoomManager(options) {
       syncingOwnMemberCoin = false;
     }
   }
-      await update(ownMemberRef, {
-        coin: nextCoin,
-        updatedAtMs: nowMs(),
-      });
-      lastSyncedOwnCoin = nextCoin;
-    } catch (error) {
-      console.error(error);
-    } finally {
-      syncingOwnMemberCoin = false;
-    }
-  }
 
   async function joinRoom(playerName, word, memberMeta) {
     roomWord = word;
