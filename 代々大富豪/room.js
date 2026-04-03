@@ -244,6 +244,8 @@ export function createRoomManager(options) {
 
   async function syncOwnMemberCoinIfNeeded() {
     if (!roomId || !playerId || syncingOwnMemberCoin) return;
+    const currentGame = getSafeCurrentGame();
+    if (currentGame && (currentGame.phase === "playing" || currentGame.phase === "trading")) return;
     const authUser = getCurrentUser();
     if (!authUser) return;
     syncingOwnMemberCoin = true;
@@ -259,6 +261,17 @@ export function createRoomManager(options) {
         lastSyncedOwnCoin = nextCoin;
         return;
       }
+      await update(ownMemberRef, {
+        coin: nextCoin,
+        updatedAtMs: nowMs(),
+      });
+      lastSyncedOwnCoin = nextCoin;
+    } catch (error) {
+      console.error(error);
+    } finally {
+      syncingOwnMemberCoin = false;
+    }
+  }
       await update(ownMemberRef, {
         coin: nextCoin,
         updatedAtMs: nowMs(),
