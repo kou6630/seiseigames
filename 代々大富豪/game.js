@@ -1,6 +1,6 @@
 import { createUI } from "./ui.js";
 import { onUserChanged } from "../shared/firebase.js";
-import { getUserData, updateUserData, useUserCoin, transferUserCoinByUid } from "../shared/userDate.js";
+import { getUserData, updateUserData, useUserCoin, transferUserCoinByUid, addUserCoinByUid, useUserCoinByUid } from "../shared/userDate.js";
 import {
   nowMs,
   normalizeRoomSettings,
@@ -120,6 +120,9 @@ function renderMembersUI(list) {
   if (ui && typeof ui.renderMembers === "function") ui.renderMembers(list);
 }
 function getBetStatusText() {
+  if (currentGame && (currentGame.phase === "playing" || currentGame.phase === "trading" || currentGame.phase === "finished")) {
+    return canStartBetMatch(currentMembers) ? "賭け試合有効" : "賭け試合無効";
+  }
   if (currentGame && currentGame.betState && currentGame.betState.active) return "賭け試合有効";
   return canStartBetMatch(currentMembers) ? "賭け試合有効" : "賭け試合無効";
 }
@@ -252,7 +255,7 @@ function getRuleEffectLockUntilMs(effectNames) {
 
 function getHumanRoomMembers(members) {
   return (Array.isArray(members) ? members : []).filter(function(member) {
-    return member && !isCpuId(member.id);
+    return !!member;
   });
 }
 
@@ -271,6 +274,9 @@ function canStartBetMatch(members) {
   const humans = getHumanRoomMembers(members);
   if (humans.length < 4) return false;
   return humans.every(function(member) {
+    if (isCpuId(member && member.id)) {
+      return getRoomMemberCoin(member) >= BET_REQUIRED_COIN;
+    }
     return !!getRoomMemberAuthUid(member) && getRoomMemberCoin(member) >= BET_REQUIRED_COIN;
   });
 }
@@ -334,10 +340,19 @@ function applyTransfersToRoomMembers(members, transfers) {
       if (!member || typeof member !== "object") return;
       const authUid = getRoomMemberAuthUid(member);
       const currentCoin = Number.isFinite(Number(member.coin)) ? Number(member.coin) : 0;
-      if (authUid && authUid === item.fromUid) member.coin = currentCoin - amount;
-      if (authUid && authUid === item.toUid) member.coin = (Number.isFinite(Number(member.coin)) ? Number(member.coin) : currentCoin) + amount;
+      if (authUid && authUid === item.fromUid) {
+        member.coin = Math.max(0, currentCoin - amount);
+        return;
+      }
+      if (authUid && authUid === item.toUid) {
+        member.coin = currentCoin + amount;
+      }
     });
   });
+}
+
+function isCpuAuthUid(uid) {
+  return String(uid || "").startsWith("cpu_");
 }
 
 async function applyBetSettlementIfNeeded(game, lastResult, members) {
@@ -349,14 +364,60 @@ async function applyBetSettlementIfNeeded(game, lastResult, members) {
   if (!transfers.length) return;
 
   try {
+    const appliedTransfers = [];
     for (const item of transfers) {
-      await transferUserCoinByUid(item.fromUid, item.toUid, item.amount, currentAuthUser);
+      const fromIsCpu = isCpuAuthUid(item.fromUid);
+      const toIsCpu = isCpuAuthUid(item.toUid);
+      const amount = Math.max(0, Number(item.amount) || 0);
+      if (!amount) continue;
+
+      if (fromIsCpu && toIsCpu) {
+        appliedTransfers.push({
+          fromUid: item.fromUid,
+          toUid: item.toUid,
+          amount: amount,
+        });
+        continue;
+      }
+
+      if (fromIsCpu) {
+        const result = await addUserCoinByUid(item.toUid, amount, currentAuthUser);
+        if (result) {
+          appliedTransfers.push({
+            fromUid: item.fromUid,
+            toUid: item.toUid,
+            amount: amount,
+          });
+        }
+        continue;
+      }
+
+      if (toIsCpu) {
+        const result = await useUserCoinByUid(item.fromUid, amount, currentAuthUser);
+        if (result) {
+          appliedTransfers.push({
+            fromUid: item.fromUid,
+            toUid: item.toUid,
+            amount: amount,
+          });
+        }
+        continue;
+      }
+
+      const result = await transferUserCoinByUid(item.fromUid, item.toUid, amount, currentAuthUser);
+      if (result && Number(result.amount) > 0) {
+        appliedTransfers.push({
+          fromUid: item.fromUid,
+          toUid: item.toUid,
+          amount: Number(result.amount) || 0,
+        });
+      }
     }
     const updatedRoom = await runRoomTransaction(function(roomData) {
       if (!roomData || !roomData.gameData || !roomData.gameData.betState || !roomData.gameData.betState.active || roomData.gameData.betState.applied) {
         return { ok: false };
       }
-      applyTransfersToRoomMembers(roomData.members, transfers);
+      applyTransfersToRoomMembers(roomData.members, appliedTransfers);
       roomData.gameData.betState.applied = true;
       return { ok: true, room: roomData };
     });
@@ -1108,7 +1169,8 @@ const roomManager = createRoomManager({
     renderMembers(data.members, data.settings);
     renderRoomSettings(data.settings);
     renderGame(data.gameData);
-    maybePlayRuleEffects(data.gameData);    applyBetSettlementIfNeeded(data.gameData, data.lastResult || null, data.members);
+    maybePlayRuleEffects(data.gameData);
+    applyBetSettlementIfNeeded(data.gameData, data.lastResult || null, currentMembers);
     setRoomMode();
   },
   onJoinRoom: function(payload) {
@@ -1258,7 +1320,7 @@ async function startGame() {
       ruleSettings: settings,
       lastActionText: lastActionText,
       betState: {
-        active: canStartBetMatch(roomData.members),
+        active: canStartBetMatch(members),
         applied: false,
       },
       ruleEffectState: null,

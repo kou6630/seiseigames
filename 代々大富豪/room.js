@@ -99,7 +99,9 @@ export function createCpuMembers(cpuCount) {
       name: "CPU" + i,
       joinedAtMs: 9000000000000 + i,
       isHost: false,
-      isCpu: true
+      isCpu: true,
+      authUid: "cpu_" + i,
+      coin: 100
     });
   }
   return list;
@@ -228,6 +230,8 @@ export function createRoomManager(options) {
     if (!roomId || !humanList.length) return;
     const currentHost = humanList.find(function(member) { return member.isHost; }) || humanList[0] || null;
     if (!currentHost) return;
+    const hostCount = humanList.filter(function(member) { return !!member.isHost; }).length;
+    if (hostCount === 1 && currentHost.isHost) return;
     const updates = {};
     let changed = false;
     humanList.forEach(function(member) {
@@ -242,26 +246,29 @@ export function createRoomManager(options) {
     }
   }
 
-  async function syncOwnMemberCoinIfNeeded() {
+  async function syncOwnMemberCoinIfNeeded(roomData) {
     if (!roomId || !playerId || syncingOwnMemberCoin) return;
-    const currentGame = getSafeCurrentGame();
-    if (currentGame && (currentGame.phase === "playing" || currentGame.phase === "trading")) return;
+    const game = roomData && roomData.gameData && typeof roomData.gameData === "object"
+      ? roomData.gameData
+      : getSafeCurrentGame();
+    if (game && (game.phase === "playing" || game.phase === "trading")) return;
+    const memberData = roomData && roomData.members && roomData.members[playerId] && typeof roomData.members[playerId] === "object"
+      ? roomData.members[playerId]
+      : null;
+    if (!memberData) return;
     const authUser = getCurrentUser();
     if (!authUser) return;
     syncingOwnMemberCoin = true;
     try {
       const liveUserData = await getUserData(authUser);
       const nextCoin = Number.isFinite(Number(liveUserData && liveUserData.coin)) ? Number(liveUserData.coin) : 0;
-      if (lastSyncedOwnCoin === nextCoin) return;
-      const ownMemberRef = ref(db, roomPath + "/" + roomId + "/members/" + playerId);
-      const ownMemberSnap = await get(ownMemberRef);
-      const ownMemberData = ownMemberSnap.val() || {};
-      const currentCoin = Number.isFinite(Number(ownMemberData.coin)) ? Number(ownMemberData.coin) : 0;
+      const currentCoin = Number.isFinite(Number(memberData.coin)) ? Number(memberData.coin) : 0;
+      if (lastSyncedOwnCoin === nextCoin && currentCoin === nextCoin) return;
       if (currentCoin === nextCoin) {
         lastSyncedOwnCoin = nextCoin;
         return;
       }
-      await update(ownMemberRef, {
+      await update(ref(db, roomPath + "/" + roomId + "/members/" + playerId), {
         coin: nextCoin,
         updatedAtMs: nowMs(),
       });
@@ -367,7 +374,7 @@ export function createRoomManager(options) {
       roomWord = data.roomWord || roomWord;
       const humans = toMemberList(data.members);
       syncHostFlag(humans);
-      syncOwnMemberCoinIfNeeded();
+      syncOwnMemberCoinIfNeeded(data);
       if (typeof onRoomSnapshot === "function") {
         onRoomSnapshot({
           roomId,
@@ -449,7 +456,10 @@ export function createRoomManager(options) {
         const afterMembersSnap = await get(ref(db, roomPath + "/" + roomId + "/members"));
         const remainMembers = toMemberList(afterMembersSnap.val());
         if (!remainMembers.length) {
-          await remove(roomBaseRef);
+          await update(roomBaseRef, {
+            updatedAt: serverTimestamp(),
+            updatedAtMs: nowMs(),
+          }).catch(console.error);
         }
         memberRef = null;
       }
