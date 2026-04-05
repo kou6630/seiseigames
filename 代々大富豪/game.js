@@ -3,6 +3,7 @@ import { onUserChanged } from "../shared/firebase.js";
 import { getUserData, updateUserData, useUserCoin, transferUserCoinByUid, addUserCoinByUid, useUserCoinByUid } from "../shared/userDate.js";
 import {
   nowMs,
+  getServerNowMs,
   normalizeRoomSettings,
   buildRulesText,
   getHostPlayerId,
@@ -232,6 +233,8 @@ const BGM_AUDIO_PATHS = {
   revolution: "./audio/bgm/ゲームロビー（革命中）.m4a"
 };
 let currentAuthUser = null;
+let lastShownResultOverlayKey = "";
+let resultOverlayTimer = null;
 let lastRuleEffectKey = "";
 let ruleEffectPlaying = false;
 let lastOwnTurnSeKey = "";
@@ -245,12 +248,13 @@ const BET_REQUIRED_COIN = 20;
 const BET_BIG_AMOUNT = 20;
 const BET_SMALL_AMOUNT = 10;
 const CPU_ACTION_DELAY_MS = 1000;
+const RESULT_OVERLAY_MS = 5000;
 
 function getRuleEffectLockUntilMs(effectNames) {
   const names = Array.isArray(effectNames)
     ? effectNames.filter(function(name) { return !!RULE_EFFECT_IMAGE_MAP[name]; })
     : [];
-  return names.length ? nowMs() + (RULE_EFFECT_MS * names.length) : 0;
+  return names.length ? getServerNowMs() + (RULE_EFFECT_MS * names.length) : 0;
 }
 
 function getHumanRoomMembers(members) {
@@ -508,6 +512,116 @@ function playBetStartEffect(isActive) {
 async function showBetStartEffectForCurrentMembers() {
   const isActive = canStartBetMatch(currentMembers);
   await playBetStartEffect(isActive);
+}
+
+function ensureResultOverlayLayer() {
+  let layer = document.getElementById("matchResultOverlay");
+  if (layer) return layer;
+  layer = document.createElement("div");
+  layer.id = "matchResultOverlay";
+  layer.setAttribute("aria-hidden", "true");
+  layer.style.setProperty("position", "fixed", "important");
+  layer.style.setProperty("left", "0", "important");
+  layer.style.setProperty("top", "0", "important");
+  layer.style.setProperty("right", "0", "important");
+  layer.style.setProperty("bottom", "0", "important");
+  layer.style.setProperty("display", "flex", "important");
+  layer.style.setProperty("align-items", "center", "important");
+  layer.style.setProperty("justify-content", "center", "important");
+  layer.style.setProperty("padding", "20px", "important");
+  layer.style.setProperty("background", "rgba(0,0,0,0)", "important");
+  layer.style.setProperty("opacity", "0", "important");
+  layer.style.setProperty("visibility", "hidden", "important");
+  layer.style.setProperty("pointer-events", "none", "important");
+  layer.style.setProperty("z-index", "2147483647", "important");
+  document.documentElement.appendChild(layer);
+  return layer;
+}
+
+function escapeResultHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function formatResultCoinMoveText(item, members) {
+  if (!item) return "";
+  const fromMember = (Array.isArray(members) ? members : []).find(function(member) {
+    return getRoomMemberAuthUid(member) === item.fromUid;
+  }) || null;
+  const toMember = (Array.isArray(members) ? members : []).find(function(member) {
+    return getRoomMemberAuthUid(member) === item.toUid;
+  }) || null;
+  const fromName = fromMember ? getMemberName(fromMember.id, members) : "不明";
+  const toName = toMember ? getMemberName(toMember.id, members) : "不明";
+  return fromName + " → " + toName + " : " + Number(item.amount || 0) + "コイン";
+}
+
+function showMatchResultOverlayIfNeeded(game, lastResult, members) {
+  if (!game || game.phase !== "finished") return;
+  if (!lastResult || !Array.isArray(lastResult.finishOrder) || !lastResult.finishOrder.length) return;
+  const overlayKey = [
+    lastResult.roundNumber || 0,
+    lastResult.finishedAtMs || 0,
+    lastResult.finishOrder.join("|"),
+    game.betState && game.betState.applied ? "applied" : "pending"
+  ].join("__");
+  if (overlayKey === lastShownResultOverlayKey) return;
+
+  const memberList = Array.isArray(members) ? members.slice() : [];
+  const roleMap = getTradeRoleMap(lastResult, memberList);
+  const transfers = game.betState && game.betState.active ? buildBetTransfers(lastResult, memberList) : [];
+  const finishRowsHtml = lastResult.finishOrder.map(function(memberId, index) {
+    const member = memberList.find(function(item) { return item && item.id === memberId; }) || null;
+    const name = member ? getMemberName(member.id, memberList) : ("プレイヤー" + (index + 1));
+    const role = roleMap[memberId] || "平民";
+    return '<div style="display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);">'
+      + '<div style="font-size:18px;font-weight:900;color:#ffe39a;">' + escapeResultHtml(String(index + 1) + "位") + '</div>'
+      + '<div style="font-size:16px;font-weight:800;color:#f8f5ff;word-break:break-word;">' + escapeResultHtml(name) + '</div>'
+      + '<div style="font-size:13px;font-weight:900;color:#d9fff1;white-space:nowrap;">' + escapeResultHtml(role) + '</div>'
+      + '</div>';
+  }).join("");
+  const moveLines = transfers.length
+    ? transfers.map(function(item) { return formatResultCoinMoveText(item, memberList); })
+    : ["コイン移動なし"];
+  const moveHtml = moveLines.map(function(line) {
+    return '<div style="padding:7px 10px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);font-size:13px;line-height:1.45;color:#f8f5ff;">' + escapeResultHtml(line) + '</div>';
+  }).join("");
+
+  const layer = ensureResultOverlayLayer();
+  layer.innerHTML = ''
+    + '<div style="width:min(100%, 720px);max-height:min(84dvh, 760px);overflow:auto;padding:22px 20px 18px;border-radius:26px;border:1px solid rgba(255,255,255,0.16);background:linear-gradient(145deg, rgba(20,18,40,0.98), rgba(28,34,58,0.98));box-shadow:0 28px 90px rgba(0,0,0,0.46);">'
+    + '<div style="font-size:30px;font-weight:900;letter-spacing:0.08em;color:#ffe39a;text-align:center;margin-bottom:16px;">試合結果</div>'
+    + '<div style="display:grid;gap:8px;margin-bottom:16px;">' + finishRowsHtml + '</div>'
+    + '<div style="font-size:16px;font-weight:900;color:#ffe39a;margin-bottom:8px;">コイン移動</div>'
+    + '<div style="display:grid;gap:8px;">' + moveHtml + '</div>'
+    + '</div>';
+
+  window.clearTimeout(resultOverlayTimer);
+  lastShownResultOverlayKey = overlayKey;
+  layer.style.transition = "none";
+  layer.style.setProperty("opacity", "0", "important");
+  layer.style.setProperty("visibility", "visible", "important");
+  layer.style.setProperty("background", "rgba(0,0,0,0)", "important");
+  layer.setAttribute("aria-hidden", "false");
+  void layer.offsetWidth;
+  requestAnimationFrame(function() {
+    layer.style.transition = "opacity 220ms ease, background 220ms ease";
+    layer.style.setProperty("opacity", "1", "important");
+    layer.style.setProperty("background", "rgba(0,0,0,0.54)", "important");
+  });
+  resultOverlayTimer = window.setTimeout(function() {
+    layer.style.setProperty("opacity", "0", "important");
+    layer.style.setProperty("background", "rgba(0,0,0,0)", "important");
+    window.setTimeout(function() {
+      layer.style.setProperty("visibility", "hidden", "important");
+      layer.setAttribute("aria-hidden", "true");
+      layer.innerHTML = "";
+    }, 240);
+  }, RESULT_OVERLAY_MS);
 }
 
 function normalize(value) {
@@ -1066,7 +1180,7 @@ function startTurnWatcher() {
     if (!currentGame || timeoutBusy) return;
     timeoutBusy = true;
     try {
-      if (currentGame.phase === "playing" && currentGame.pendingClearField && currentGame.pendingClearField.executeAtMs && nowMs() >= currentGame.pendingClearField.executeAtMs) {
+      if (currentGame.phase === "playing" && currentGame.pendingClearField && currentGame.pendingClearField.executeAtMs && getServerNowMs() >= currentGame.pendingClearField.executeAtMs) {
         await resolvePendingClearField();
         return;
       }
@@ -1088,19 +1202,19 @@ function startTurnWatcher() {
             const giveIds = getWeakestCardIds(cpuHand, roomPair.count);
             return mutatePlay(roomData, roomPair.fromPlayerId, giveIds, "trade");
           });
-        } else if (tradeState && tradeState.startedAtMs && nowMs() - tradeState.startedAtMs >= TRADE_PHASE_MS) {
+        } else if (tradeState && tradeState.startedAtMs && getServerNowMs() - tradeState.startedAtMs >= TRADE_PHASE_MS) {
           await resolveTradeTimeout();
         }
       } else if (currentGame.phase === "playing") {
         if ((currentGame.pendingSevenPass && isCpuId(currentGame.pendingSevenPass.fromPlayerId)) || isCpuId(currentGame.currentTurnPlayerId)) {
           const cpuActionAtMs = currentGame.cpuActionAtMs || 0;
-          if (!cpuActionAtMs || nowMs() >= cpuActionAtMs) {
+          if (!cpuActionAtMs || getServerNowMs() >= cpuActionAtMs) {
             await resolveCpuAuto();
           }
         } else {
           const limit = (currentGame.turnTimeSeconds || currentSettings.turnTimeSeconds || 30) * 1000;
           const startedAt = currentGame.currentTurnStartedAtMs || 0;
-          if (startedAt && nowMs() - startedAt >= limit) {
+          if (startedAt && getServerNowMs() - startedAt >= limit) {
             await resolveTurnTimeout();
           }
         }
@@ -1143,6 +1257,7 @@ function getRoleBadgeHtml(role) {
 
 const mutatePlay = createMutatePlay({
   nowMs,
+  getServerNowMs,
   normalizeRoomSettings,
   getHostPlayerId,
   isCpuId,
@@ -1171,6 +1286,7 @@ const roomManager = createRoomManager({
     renderGame(data.gameData);
     maybePlayRuleEffects(data.gameData);
     applyBetSettlementIfNeeded(data.gameData, data.lastResult || null, currentMembers);
+    showMatchResultOverlayIfNeeded(data.gameData, data.lastResult || null, currentMembers);
     setRoomMode();
   },
   onJoinRoom: function(payload) {
@@ -1189,6 +1305,14 @@ const roomManager = createRoomManager({
     ruleEffectPlaying = false;
     currentMembers = [];
     currentGame = null;
+    window.clearTimeout(resultOverlayTimer);
+    const resultOverlay = document.getElementById("matchResultOverlay");
+    if (resultOverlay) {
+      resultOverlay.style.setProperty("opacity", "0", "important");
+      resultOverlay.style.setProperty("visibility", "hidden", "important");
+      resultOverlay.setAttribute("aria-hidden", "true");
+      resultOverlay.innerHTML = "";
+    }
     currentLastResult = null;
     currentSettings = normalizeRoomSettings(null);
     selectedCardIds = new Set();
@@ -1269,7 +1393,7 @@ async function startGame() {
       if (pairs.length) {
         phase = "trading";
         tradeState = {
-          startedAtMs: nowMs(),
+          startedAtMs: getServerNowMs(),
           pairs: pairs.map(function(pair) {
             const forcedIds = getStrongestCardIds(hands[pair.toPlayerId], pair.count);
             const forcedCards = getCurrentHand({ hands: hands }, pair.toPlayerId).filter(function(card) { return forcedIds.includes(card.id); });
@@ -1292,14 +1416,14 @@ async function startGame() {
 
     roomData.gameData = {
       phase: phase,
-      startedAtMs: nowMs(),
+      startedAtMs: getServerNowMs(),
       revolution: false,
       jackBackActive: false,
       direction: 1,
       turnOrder: turnOrder,
       currentTurnPlayerId: phase === "playing" ? firstTurnPlayerId : "",
-      currentTurnStartedAtMs: phase === "playing" ? nowMs() : 0,
-      cpuActionAtMs: phase === "playing" && isCpuId(firstTurnPlayerId) ? nowMs() + CPU_ACTION_DELAY_MS : 0,
+      currentTurnStartedAtMs: phase === "playing" ? getServerNowMs() : 0,
+      cpuActionAtMs: phase === "playing" && isCpuId(firstTurnPlayerId) ? getServerNowMs() + CPU_ACTION_DELAY_MS : 0,
       hands: hands,
       lastPlay: null,
       lastPlayPlayerId: "",
@@ -1605,6 +1729,7 @@ ui = createUI({
   },
   helpers: {
     nowMs,
+    getServerNowMs,
     getMemberName,
     getCurrentHand,
     getTradePairForPlayer,

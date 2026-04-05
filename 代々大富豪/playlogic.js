@@ -665,6 +665,7 @@ export function buildRuleEffectState(effectNames, actorId, ruleEffectImageMap, n
 export function createMutatePlay(deps) {
   const {
     nowMs,
+    getServerNowMs,
     normalizeRoomSettings,
     getHostPlayerId,
     isCpuId,
@@ -674,6 +675,8 @@ export function createMutatePlay(deps) {
     getRuleEffectLockUntilMs,
     eightCutDelayMs
   } = deps;
+
+  const baseNowMs = typeof getServerNowMs === "function" ? getServerNowMs : nowMs;
 
   return function mutatePlay(roomData, actorId, cardIds, actionType) {
     const safeCardIds = Array.isArray(cardIds) ? cardIds : [];
@@ -712,14 +715,14 @@ export function createMutatePlay(deps) {
         };
       });
       game.lastTradeResult = {
-        finishedAtMs: nowMs(),
+        finishedAtMs: baseNowMs(),
         players: tradeResultMap
       };
       game.tradeState = null;
       game.phase = "playing";
       game.currentTurnPlayerId = game.turnOrder[0] || "";
-      game.currentTurnStartedAtMs = nowMs();
-      game.cpuActionAtMs = isCpuId(game.currentTurnPlayerId) ? nowMs() + 1000 : 0;
+      game.currentTurnStartedAtMs = baseNowMs();
+      game.cpuActionAtMs = isCpuId(game.currentTurnPlayerId) ? baseNowMs() + 1000 : 0;
       game.lastActionText = "カード交換完了";
       game.ruleEffectState = null;
       roomData.gameData = game;
@@ -754,15 +757,15 @@ export function createMutatePlay(deps) {
     if (game.numberLockKey !== null && typeof game.numberLockKey !== "number") game.numberLockKey = null;
     if (typeof game.lastPlayPlayerId !== "string") game.lastPlayPlayerId = "";
     if (typeof game.pendingRuleEffectUntilMs !== "number") game.pendingRuleEffectUntilMs = 0;
-    if (game.pendingRuleEffectUntilMs && nowMs() >= game.pendingRuleEffectUntilMs) {
+    if (game.pendingRuleEffectUntilMs && baseNowMs() >= game.pendingRuleEffectUntilMs) {
       game.pendingRuleEffectUntilMs = 0;
       game.ruleEffectState = null;
     }
 
     if (actionType === "resolveEightCut") {
-      if (!game.pendingClearField || nowMs() < game.pendingClearField.executeAtMs) return { ok: false };
+      if (!game.pendingClearField || baseNowMs() < game.pendingClearField.executeAtMs) return { ok: false };
       const nextPlayerId = game.pendingClearField.nextPlayerId || "";
-      clearField(game, nextPlayerId, nowMs, isCpuId);
+      clearField(game, nextPlayerId, baseNowMs, isCpuId);
       roomData.gameData = game;
       return { ok: true, room: roomData };
     }
@@ -770,7 +773,7 @@ export function createMutatePlay(deps) {
     if (actionType === "timeout" || actionType === "auto") {
       const limit = (game.turnTimeSeconds || settings.turnTimeSeconds || 30) * 1000;
       if (actionType === "timeout") {
-        if (!game.currentTurnStartedAtMs || nowMs() - game.currentTurnStartedAtMs < limit) return { ok: false };
+        if (!game.currentTurnStartedAtMs || baseNowMs() - game.currentTurnStartedAtMs < limit) return { ok: false };
         if (getHostPlayerId(roomData.members) !== actorId) return { ok: false };
       }
       if (game.pendingSevenPass) {
@@ -804,11 +807,11 @@ export function createMutatePlay(deps) {
         const leader = activeIds.includes(game.lastPlayPlayerId)
           ? game.lastPlayPlayerId
           : getNextActivePlayer(game.turnOrder, game.finishOrder, game.lastPlayPlayerId || actorId, game.direction, [], 1);
-        clearField(game, leader, nowMs, isCpuId);
+        clearField(game, leader, baseNowMs, isCpuId);
         game.lastActionText = getMemberName(actorId, members) + " がパス / 場が流れました";
         game.ruleEffectState = null;
       } else {
-        advanceTurn(game, actorId, 0, game.passedPlayerIds, nowMs, isCpuId);
+        advanceTurn(game, actorId, 0, game.passedPlayerIds, baseNowMs, isCpuId);
         game.lastActionText = getMemberName(actorId, members) + " がパス";
         game.ruleEffectState = null;
       }
@@ -830,7 +833,7 @@ export function createMutatePlay(deps) {
         let miyakoDroppedPlayerId = "";
         const foulFinish = !game.hands[actorId].length && isForbiddenAgariCards((game.lastPlay && game.lastPlay.cards) || [], getEffectiveRevolution(game), settings.foulAgariEnabled);
         if (!game.hands[actorId].length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings, foulFinish);
-        const lastResult = maybeFinishGame(roomData, game, nowMs);
+        const lastResult = maybeFinishGame(roomData, game, baseNowMs);
         if (lastResult) {
           game.lastActionText = getMemberName(actorId, members) + (foulFinish ? " が10捨てを完了しました / 反則上がり" : " が10捨てを完了して上がりました") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
           game.ruleEffectState = null;
@@ -845,13 +848,13 @@ export function createMutatePlay(deps) {
             cards: game.lastPlay.cards,
             reason: pending.clearReason || "8切り"
           };
-          beginEightCutDelay(game, leader, getMemberName(actorId, members) + " が10捨てを完了 / " + (pending.clearReason || "8切り") + "で場を流しました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : ""), nowMs, eightCutDelayMs);
+          beginEightCutDelay(game, leader, getMemberName(actorId, members) + " が10捨てを完了 / " + (pending.clearReason || "8切り") + "で場を流しました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : ""), baseNowMs, eightCutDelayMs);
           game.ruleEffectState = null;
         } else {
           game.passedPlayerIds = getSkippedPlayerIds(game.turnOrder, game.finishOrder, actorId, game.direction, [], pending.skipCount || 0);
-          advanceTurn(game, actorId, pending.skipCount || 0, [], nowMs, isCpuId);
+          advanceTurn(game, actorId, pending.skipCount || 0, [], baseNowMs, isCpuId);
           if (game.currentTurnPlayerId === actorId) {
-            clearField(game, actorId, nowMs, isCpuId);
+            clearField(game, actorId, baseNowMs, isCpuId);
             game.lastActionText = getMemberName(actorId, members) + " が10捨てを完了 / 場が流れました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
           } else {
             game.lastActionText = getMemberName(actorId, members) + " が10捨てを完了" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
@@ -873,7 +876,7 @@ export function createMutatePlay(deps) {
       let miyakoDroppedPlayerId = "";
       const foulFinish = !game.hands[actorId].length && isForbiddenAgariCards((game.lastPlay && game.lastPlay.cards) || [], getEffectiveRevolution(game), settings.foulAgariEnabled);
       if (!game.hands[actorId].length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings, foulFinish);
-      const lastResult = maybeFinishGame(roomData, game, nowMs);
+      const lastResult = maybeFinishGame(roomData, game, baseNowMs);
       if (lastResult) {
         game.lastActionText = getMemberName(actorId, members) + (foulFinish ? " が渡し終えました / 反則上がり" : " が渡し終えて上がりました") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
         game.ruleEffectState = null;
@@ -884,13 +887,13 @@ export function createMutatePlay(deps) {
       if (pending.eightCut) {
         const leader = game.finishOrder.includes(actorId) ? getNextActivePlayer(game.turnOrder, game.finishOrder, actorId, game.direction, [], 1) : actorId;
         game.resolvedField = resolvedField;
-        beginEightCutDelay(game, leader, getMemberName(actorId, members) + " が7渡しを完了 / " + (pending.clearReason || "8切り") + "で場を流しました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : ""), nowMs, eightCutDelayMs);
+        beginEightCutDelay(game, leader, getMemberName(actorId, members) + " が7渡しを完了 / " + (pending.clearReason || "8切り") + "で場を流しました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : ""), baseNowMs, eightCutDelayMs);
         game.ruleEffectState = null;
       } else {
         game.passedPlayerIds = getSkippedPlayerIds(game.turnOrder, game.finishOrder, actorId, game.direction, [], pending.skipCount || 0);
-        advanceTurn(game, actorId, pending.skipCount || 0, [], nowMs, isCpuId);
+        advanceTurn(game, actorId, pending.skipCount || 0, [], baseNowMs, isCpuId);
         if (game.currentTurnPlayerId === actorId) {
-          clearField(game, actorId, nowMs, isCpuId);
+          clearField(game, actorId, baseNowMs, isCpuId);
           game.lastActionText = getMemberName(actorId, members) + " が " + getMemberName(targetId, members) + " にカードを渡しました / 場が流れました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
         } else {
           game.lastActionText = getMemberName(actorId, members) + " が " + getMemberName(targetId, members) + " にカードを渡しました" + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
@@ -937,7 +940,7 @@ export function createMutatePlay(deps) {
       suitKey: play.suitKey,
       rankKey: play.rankKey,
       playerId: actorId,
-      playedAtMs: nowMs()
+      playedAtMs: baseNowMs()
     };
     game.lastPlayPlayerId = actorId;
     game.passedPlayerIds = [];
@@ -1011,10 +1014,10 @@ export function createMutatePlay(deps) {
         clearReason: clearReason
       };
       game.currentTurnPlayerId = actorId;
-      game.currentTurnStartedAtMs = nowMs();
-      game.cpuActionAtMs = isCpuId(actorId) ? nowMs() + 1000 : 0;
+      game.currentTurnStartedAtMs = baseNowMs();
+      game.cpuActionAtMs = isCpuId(actorId) ? baseNowMs() + 1000 : 0;
       game.lastActionText = getMemberName(actorId, members) + " が 10捨てを発動" + (messageParts.length ? " / " + messageParts.join(" / ") : "");
-      game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, nowMs);
+      game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, baseNowMs);
       game.pendingRuleEffectUntilMs = getRuleEffectLockUntilMs(messageParts);
       roomData.gameData = game;
       return { ok: true, room: roomData };
@@ -1030,10 +1033,10 @@ export function createMutatePlay(deps) {
         clearReason: clearReason
       };
       game.currentTurnPlayerId = actorId;
-      game.currentTurnStartedAtMs = nowMs();
-      game.cpuActionAtMs = isCpuId(actorId) ? nowMs() + 1000 : 0;
+      game.currentTurnStartedAtMs = baseNowMs();
+      game.cpuActionAtMs = isCpuId(actorId) ? baseNowMs() + 1000 : 0;
       game.lastActionText = getMemberName(actorId, members) + " が 7渡しを発動" + (messageParts.length ? " / " + messageParts.join(" / ") : "");
-      game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, nowMs);
+      game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, baseNowMs);
       game.pendingRuleEffectUntilMs = getRuleEffectLockUntilMs(messageParts);
       roomData.gameData = game;
       return { ok: true, room: roomData };
@@ -1041,10 +1044,10 @@ export function createMutatePlay(deps) {
 
     let miyakoDroppedPlayerId = "";
     if (!remainingHand.length) miyakoDroppedPlayerId = finalizePlayer(game, actorId, settings, forbiddenAgari);
-    const lastResult = maybeFinishGame(roomData, game, nowMs);
+    const lastResult = maybeFinishGame(roomData, game, baseNowMs);
     if (lastResult) {
       game.lastActionText = getMemberName(actorId, members) + (forbiddenAgari ? " が反則上がり" : " が上がりました") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
-      game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, nowMs);
+      game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, baseNowMs);
       game.pendingRuleEffectUntilMs = getRuleEffectLockUntilMs(messageParts);
       roomData.lastResult = lastResult;
       roomData.gameData = game;
@@ -1058,19 +1061,19 @@ export function createMutatePlay(deps) {
         cards: cards,
         reason: clearReason
       };
-      beginEightCutDelay(game, leader, getMemberName(actorId, members) + " が" + (spadeThreeReturnTriggered ? "スペ3返し" : (ninetyNineCarTriggered ? "99車" : "8切")) + "で場を流しました" + (messageParts.length ? " / " + messageParts.join(" / ") : "") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : ""), nowMs, eightCutDelayMs);
-      game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, nowMs);
+      beginEightCutDelay(game, leader, getMemberName(actorId, members) + " が" + (spadeThreeReturnTriggered ? "スペ3返し" : (ninetyNineCarTriggered ? "99車" : "8切")) + "で場を流しました" + (messageParts.length ? " / " + messageParts.join(" / ") : "") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : ""), baseNowMs, eightCutDelayMs);
+      game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, baseNowMs);
       game.pendingRuleEffectUntilMs = getRuleEffectLockUntilMs(messageParts);
     } else {
       game.passedPlayerIds = fiveSkippedPlayerIds.slice();
-      advanceTurn(game, actorId, fiveSkipExtraSteps, [], nowMs, isCpuId);
+      advanceTurn(game, actorId, fiveSkipExtraSteps, [], baseNowMs, isCpuId);
       if (game.currentTurnPlayerId === actorId) {
-        clearField(game, actorId, nowMs, isCpuId);
+        clearField(game, actorId, baseNowMs, isCpuId);
         game.lastActionText = getMemberName(actorId, members) + " がカードを出しました / 場が流れました" + (messageParts.length ? " / " + messageParts.join(" / ") : "") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
       } else {
         game.lastActionText = getMemberName(actorId, members) + " がカードを出しました" + (messageParts.length ? " / " + messageParts.join(" / ") : "") + (miyakoDroppedPlayerId ? " / " + getMemberName(miyakoDroppedPlayerId, members) + " が都落ち" : "");
       }
-      game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, nowMs);
+      game.ruleEffectState = buildRuleEffectState(messageParts, actorId, ruleEffectImageMap, baseNowMs);
       game.pendingRuleEffectUntilMs = getRuleEffectLockUntilMs(messageParts);
     }
 

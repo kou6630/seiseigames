@@ -2,6 +2,9 @@ import { app, getCurrentUser } from "../shared/firebase.js";
 import { getUserData } from "../shared/userDate.js";
 import { getDatabase, ref, set, get, update, remove, onValue, onDisconnect, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
+let serverTimeOffsetMs = 0;
+let serverTimeOffsetWatching = false;
+
 export function normalizeRoomSettings(settings) {
   return {
     eightCutEnabled: settings ? settings.eightCutEnabled !== false : true,
@@ -51,6 +54,10 @@ export function buildRulesText(settings) {
 
 export function nowMs() {
   return Date.now();
+}
+
+export function getServerNowMs() {
+  return Date.now() + serverTimeOffsetMs;
 }
 
 export function hashRoomWord(value) {
@@ -167,6 +174,14 @@ export function createRoomManager(options) {
   } = options;
 
   const db = getDatabase(app);
+
+  if (!serverTimeOffsetWatching) {
+    serverTimeOffsetWatching = true;
+    onValue(ref(db, "/.info/serverTimeOffset"), function(snapshot) {
+      const offset = Number(snapshot.val());
+      serverTimeOffsetMs = Number.isFinite(offset) ? offset : 0;
+    });
+  }
 
   let roomId = "";
   let roomWord = "";

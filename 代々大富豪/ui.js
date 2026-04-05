@@ -29,6 +29,7 @@ export function createUI(deps) {
 
   const {
     nowMs,
+    getServerNowMs,
     getMemberName,
     getCurrentHand,
     getTradePairForPlayer,
@@ -632,7 +633,7 @@ export function createUI(deps) {
       lastOwnTurnMeterStartedAtMs = baseStartedAtMs;
     }
 
-    remainMs = Math.max(0, totalMs - Math.max(0, nowMs() - lastOwnTurnMeterStartedAtMs));
+    remainMs = Math.max(0, totalMs - Math.max(0, getServerNowMs() - lastOwnTurnMeterStartedAtMs));
     const ratio = Math.max(0, Math.min(1, remainMs / totalMs));
     meterBar.style.width = (ratio * 100).toFixed(1) + "%";
     if (ratio <= 0.25) {
