@@ -19,6 +19,14 @@ const USERS_COLLECTION = "users";
 const DEFAULT_COIN = 0;
 const DEFAULT_AVATAR = "default";
 const DEFAULT_NICKNAME = "";
+const FIRST_GAME_SELECT_LOGIN_BONUS = 200;
+const DAILY_LOGIN_BONUS_RESET_HOUR = 9;
+const DAILY_LOGIN_BONUS_CARDS = {
+  "1等": { coin: 3000, count: 1 },
+  "2等": { coin: 1500, count: 4 },
+  "3等": { coin: 500, count: 15 },
+  "4等": { coin: 100, count: 30 },
+};
 const ADMIN_EMAILS = ["takoponnsama6630@gmail.com"];
 
 function buildDefaultUserData(user) {
@@ -32,6 +40,10 @@ function buildDefaultUserData(user) {
     nickname: DEFAULT_NICKNAME,
     selectedAvatar: DEFAULT_AVATAR,
     ownedAvatars: [DEFAULT_AVATAR],
+    firstGameSelectLoginBonusReceived: false,
+    dailyLoginBonusLastResetKey: "",
+    dailyLoginBonusReceived: false,
+    dailyLoginBonusDeck: [],
     isAdmin: ADMIN_EMAILS.includes(String(user.email || "").toLowerCase()),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -59,6 +71,10 @@ function normalizeUserData(uid, data = {}) {
       : DEFAULT_NICKNAME,
     selectedAvatar,
     ownedAvatars,
+    firstGameSelectLoginBonusReceived: Boolean(data.firstGameSelectLoginBonusReceived),
+    dailyLoginBonusLastResetKey: typeof data.dailyLoginBonusLastResetKey === "string" ? data.dailyLoginBonusLastResetKey : "",
+    dailyLoginBonusReceived: Boolean(data.dailyLoginBonusReceived),
+    dailyLoginBonusDeck: Array.isArray(data.dailyLoginBonusDeck) ? data.dailyLoginBonusDeck : [],
     isAdmin: Boolean(data.isAdmin),
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
@@ -99,6 +115,18 @@ export async function ensureUserData(user = getCurrentUser()) {
     photoURL: currentUser.photoURL || existing.photoURL || "",
     selectedAvatarImage: existing.selectedAvatarImage || currentUser.photoURL || existing.photoURL || "",
     nickname: typeof existing.nickname === "string" ? existing.nickname : DEFAULT_NICKNAME,
+    firstGameSelectLoginBonusReceived: typeof existing.firstGameSelectLoginBonusReceived === "boolean"
+      ? existing.firstGameSelectLoginBonusReceived
+      : false,
+    dailyLoginBonusLastResetKey: typeof existing.dailyLoginBonusLastResetKey === "string"
+      ? existing.dailyLoginBonusLastResetKey
+      : "",
+    dailyLoginBonusReceived: typeof existing.dailyLoginBonusReceived === "boolean"
+      ? existing.dailyLoginBonusReceived
+      : false,
+    dailyLoginBonusDeck: Array.isArray(existing.dailyLoginBonusDeck)
+      ? existing.dailyLoginBonusDeck
+      : [],
     isAdmin: typeof existing.isAdmin === "boolean"
       ? existing.isAdmin
       : ADMIN_EMAILS.includes(String(currentUser.email || "").toLowerCase()),
@@ -111,6 +139,10 @@ export async function ensureUserData(user = getCurrentUser()) {
     photoURL: merged.photoURL,
     selectedAvatarImage: merged.selectedAvatarImage,
     nickname: merged.nickname,
+    firstGameSelectLoginBonusReceived: merged.firstGameSelectLoginBonusReceived,
+    dailyLoginBonusLastResetKey: merged.dailyLoginBonusLastResetKey,
+    dailyLoginBonusReceived: merged.dailyLoginBonusReceived,
+    dailyLoginBonusDeck: merged.dailyLoginBonusDeck,
     isAdmin: merged.isAdmin,
     updatedAt: merged.updatedAt,
   });
@@ -122,6 +154,10 @@ export async function ensureUserData(user = getCurrentUser()) {
     photoURL: merged.photoURL,
     selectedAvatarImage: merged.selectedAvatarImage,
     nickname: merged.nickname,
+    firstGameSelectLoginBonusReceived: merged.firstGameSelectLoginBonusReceived,
+    dailyLoginBonusLastResetKey: merged.dailyLoginBonusLastResetKey,
+    dailyLoginBonusReceived: merged.dailyLoginBonusReceived,
+    dailyLoginBonusDeck: merged.dailyLoginBonusDeck,
     isAdmin: merged.isAdmin,
   });
 }
@@ -371,4 +407,186 @@ export async function transferUserCoinByUid(fromUid, toUid, amount, user = getCu
   };
 }
 
-export { db, USERS_COLLECTION, DEFAULT_COIN, DEFAULT_AVATAR, DEFAULT_NICKNAME };
+export async function grantFirstGameSelectLoginBonus(user = getCurrentUser()) {
+  const currentUser = requireUser(user);
+  const userRef = getUserRef(currentUser.uid);
+  const snapshot = await getDoc(userRef);
+
+  if (!snapshot.exists()) {
+    await ensureUserData(currentUser);
+    return grantFirstGameSelectLoginBonus(currentUser);
+  }
+
+  const data = normalizeUserData(currentUser.uid, snapshot.data() || {});
+
+  if (data.firstGameSelectLoginBonusReceived) {
+    return {
+      awarded: false,
+      amount: 0,
+      userData: data,
+    };
+  }
+
+  const nextCoin = Math.max(0, Number(data.coin || 0) + FIRST_GAME_SELECT_LOGIN_BONUS);
+
+  await updateDoc(userRef, {
+    coin: nextCoin,
+    firstGameSelectLoginBonusReceived: true,
+    updatedAt: serverTimestamp(),
+  });
+
+  return {
+    awarded: true,
+    amount: FIRST_GAME_SELECT_LOGIN_BONUS,
+    userData: normalizeUserData(currentUser.uid, {
+      ...data,
+      coin: nextCoin,
+      firstGameSelectLoginBonusReceived: true,
+    }),
+  };
+}
+
+function getDailyLoginBonusResetKey(date = new Date()) {
+  const jstNow = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+  const resetBase = new Date(jstNow);
+
+  if (resetBase.getUTCHours() < DAILY_LOGIN_BONUS_RESET_HOUR) {
+    resetBase.setUTCDate(resetBase.getUTCDate() - 1);
+  }
+
+  const year = resetBase.getUTCFullYear();
+  const month = String(resetBase.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(resetBase.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDailyLoginBonusCoin(rank) {
+  return DAILY_LOGIN_BONUS_CARDS[rank] ? DAILY_LOGIN_BONUS_CARDS[rank].coin : 0;
+}
+
+function buildDailyLoginBonusDeck() {
+  const deck = Object.entries(DAILY_LOGIN_BONUS_CARDS).flatMap(([rank, info]) => {
+    return Array.from({ length: info.count }, function() {
+      return rank;
+    });
+  });
+
+  for (let i = deck.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = deck[i];
+    deck[i] = deck[j];
+    deck[j] = temp;
+  }
+
+  return deck;
+}
+
+export async function grantDailyLoginBonus(user = getCurrentUser(), selectedCard = null) {
+  const currentUser = requireUser(user);
+  const userRef = getUserRef(currentUser.uid);
+  const snapshot = await getDoc(userRef);
+
+  if (!snapshot.exists()) {
+    await ensureUserData(currentUser);
+    return grantDailyLoginBonus(currentUser, selectedCard);
+  }
+
+  const data = normalizeUserData(currentUser.uid, snapshot.data() || {});
+  const resetKey = getDailyLoginBonusResetKey();
+  const alreadyReceivedToday = data.dailyLoginBonusLastResetKey === resetKey && data.dailyLoginBonusReceived;
+
+  if (!selectedCard) {
+    if (alreadyReceivedToday) {
+      return {
+        available: false,
+        awarded: false,
+        userData: data,
+      };
+    }
+
+    const nextDeck = data.dailyLoginBonusLastResetKey !== resetKey || !Array.isArray(data.dailyLoginBonusDeck) || data.dailyLoginBonusDeck.length !== 50
+      ? buildDailyLoginBonusDeck()
+      : data.dailyLoginBonusDeck;
+
+    if (
+      data.dailyLoginBonusLastResetKey !== resetKey ||
+      data.dailyLoginBonusReceived ||
+      !Array.isArray(data.dailyLoginBonusDeck) ||
+      data.dailyLoginBonusDeck.length !== 50
+    ) {
+      await updateDoc(userRef, {
+        dailyLoginBonusLastResetKey: resetKey,
+        dailyLoginBonusReceived: false,
+        dailyLoginBonusDeck: nextDeck,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    return {
+      available: true,
+      awarded: false,
+      resetKey,
+      userData: normalizeUserData(currentUser.uid, {
+        ...data,
+        dailyLoginBonusLastResetKey: resetKey,
+        dailyLoginBonusReceived: false,
+        dailyLoginBonusDeck: nextDeck,
+      }),
+    };
+  }
+
+  if (alreadyReceivedToday) {
+    return {
+      available: false,
+      awarded: false,
+      userData: data,
+    };
+  }
+
+  const selectedIndex = Number(selectedCard && selectedCard.index);
+  const deck = Array.isArray(data.dailyLoginBonusDeck) && data.dailyLoginBonusDeck.length === 50
+    ? data.dailyLoginBonusDeck
+    : buildDailyLoginBonusDeck();
+  const rank = Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex < deck.length
+    ? String(deck[selectedIndex] || "").trim()
+    : "";
+  const amount = getDailyLoginBonusCoin(rank);
+  if (!amount) {
+    throw new Error("ログインボーナスの内容が不正です");
+  }
+
+  const nextCoin = Math.max(0, Number(data.coin || 0) + amount);
+
+  await updateDoc(userRef, {
+    coin: nextCoin,
+    dailyLoginBonusLastResetKey: resetKey,
+    dailyLoginBonusReceived: true,
+    dailyLoginBonusDeck: [],
+    updatedAt: serverTimestamp(),
+  });
+
+  return {
+    available: false,
+    awarded: true,
+    rank,
+    amount,
+    userData: normalizeUserData(currentUser.uid, {
+      ...data,
+      coin: nextCoin,
+      dailyLoginBonusLastResetKey: resetKey,
+      dailyLoginBonusReceived: true,
+      dailyLoginBonusDeck: [],
+    }),
+  };
+}
+
+export {
+  db,
+  USERS_COLLECTION,
+  DEFAULT_COIN,
+  DEFAULT_AVATAR,
+  DEFAULT_NICKNAME,
+  FIRST_GAME_SELECT_LOGIN_BONUS,
+  DAILY_LOGIN_BONUS_RESET_HOUR,
+  DAILY_LOGIN_BONUS_CARDS,
+};

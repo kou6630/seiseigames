@@ -79,6 +79,8 @@ export function toMemberList(members) {
       isHost: !!(entry[1] && entry[1].isHost),
       authUid: entry[1] && entry[1].authUid ? entry[1].authUid : "",
       coin: entry[1] && Number.isFinite(Number(entry[1].coin)) ? Number(entry[1].coin) : 0,
+      connected: entry[1] ? entry[1].connected !== false : true,
+      disconnectedAtMs: entry[1] && Number.isFinite(Number(entry[1].disconnectedAtMs)) ? Number(entry[1].disconnectedAtMs) : 0,
     };
   }).sort(function(a, b) {
     if (!!a.isHost !== !!b.isHost) return a.isHost ? -1 : 1;
@@ -359,7 +361,12 @@ export function createRoomManager(options) {
     }
     const safeMeta = resolvedMeta && typeof resolvedMeta === "object" ? resolvedMeta : {};
     const amHostPlayer = memberList.length === 0;
-    onDisconnect(memberRef).remove();
+    onDisconnect(memberRef).update({
+      connected: false,
+      disconnectedAtMs: serverTimestamp(),
+      disconnectedAtMsValue: nowMs(),
+      updatedAtMs: nowMs(),
+    });
     await set(memberRef, {
       name: playerName,
       isHost: amHostPlayer,
@@ -367,6 +374,9 @@ export function createRoomManager(options) {
       joinedAtMs: nowMs(),
       authUid: typeof safeMeta.authUid === "string" ? safeMeta.authUid : "",
       coin: Number.isFinite(Number(safeMeta.coin)) ? Number(safeMeta.coin) : 0,
+      connected: true,
+      disconnectedAtMs: null,
+      disconnectedAtMsValue: 0,
     });
     lastSyncedOwnCoin = Number.isFinite(Number(safeMeta.coin)) ? Number(safeMeta.coin) : 0;
 
@@ -467,9 +477,24 @@ export function createRoomManager(options) {
       }
       if (memberRef) {
         const roomBaseRef = ref(db, roomPath + "/" + roomId);
-        await remove(memberRef);
+        const roomSnap = await get(roomBaseRef);
+        const roomData = roomSnap.val() || {};
+        const game = roomData && roomData.gameData && typeof roomData.gameData === "object" ? roomData.gameData : null;
+        const shouldKeepSeat = !!(game && (game.phase === "playing" || game.phase === "trading" || game.phase === "finished"));
+        if (shouldKeepSeat) {
+          await update(memberRef, {
+            connected: false,
+            disconnectedAtMs: serverTimestamp(),
+            disconnectedAtMsValue: nowMs(),
+            updatedAtMs: nowMs(),
+          });
+        } else {
+          await remove(memberRef);
+        }
         const afterMembersSnap = await get(ref(db, roomPath + "/" + roomId + "/members"));
-        const remainMembers = toMemberList(afterMembersSnap.val());
+        const remainMembers = toMemberList(afterMembersSnap.val()).filter(function(member) {
+          return member.connected !== false;
+        });
         if (!remainMembers.length) {
           await update(roomBaseRef, {
             updatedAt: serverTimestamp(),
