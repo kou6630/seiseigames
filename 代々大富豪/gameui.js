@@ -141,6 +141,25 @@ export function createGameUiRuntime(deps) {
     revolution: "./audio/bgm/ゲームロビー（革命中）.m4a"
   };
 
+  const AVATAR_IMAGE_MAP = {
+    avatar_1: "/img/アバター/1-虹靴.png",
+    avatar_2: "/img/アバター/2-古い野球玉.png",
+    avatar_3: "/img/アバター/3-焼きちくわ.png",
+    avatar_4: "/img/アバター/4-ブルーアップル.png",
+    avatar_5: "/img/アバター/5-チーズ.png",
+    avatar_6: "/img/アバター/6-カラースプレー.png",
+    avatar_41: "/img/アバター/41-ネズミ.png",
+    avatar_42: "/img/アバター/42-ピンクカエル.png",
+    avatar_43: "/img/アバター/43-タバコマン.png",
+    avatar_44: "/img/アバター/44-凶悪アヒル.png",
+    avatar_71: "/img/アバター/71-素ゴリ.png",
+    avatar_72: "/img/アバター/72-素りな.png",
+    avatar_73: "/img/アバター/73-素めそ.png",
+    avatar_91: "/img/アバター/91-カエルゴリ.png",
+    avatar_92: "/img/アバター/92-カエルりな.png",
+    avatar_93: "/img/アバター/93-カエルめそ.png"
+  };
+
   if (settingsPanel) {
     settingsPanel.style.maxHeight = "calc(100dvh - 150px)";
     settingsPanel.style.overflowY = "auto";
@@ -550,8 +569,7 @@ export function createGameUiRuntime(deps) {
     const overlayKey = [
       lastResult.roundNumber || 0,
       lastResult.finishedAtMs || 0,
-      lastResult.finishOrder.join("|"),
-      game.betState && game.betState.applied ? "applied" : "pending"
+      lastResult.finishOrder.join("|")
     ].join("__");
     if (overlayKey === lastShownResultOverlayKey) return;
 
@@ -677,17 +695,27 @@ export function createGameUiRuntime(deps) {
     return "";
   }
 
+  function getProfileAvatarImage(profile) {
+    const selectedAvatar = normalize(profile && profile.selectedAvatar ? profile.selectedAvatar : "");
+    return selectedAvatar && AVATAR_IMAGE_MAP[selectedAvatar] ? AVATAR_IMAGE_MAP[selectedAvatar] : "";
+  }
+
   async function getLiveProfile(user) {
-    if (!user || !user.uid) return { nickname: "", coin: 0 };
+    if (!user || !user.uid) return { nickname: "", coin: 0, avatarImage: "" };
     try {
       const data = await getUserData(user);
       return {
         nickname: typeof data.nickname === "string" ? normalize(data.nickname) : "",
-        coin: Number.isFinite(Number(data.coin)) ? Number(data.coin) : 0
+        coin: Number.isFinite(Number(data.coin)) ? Number(data.coin) : 0,
+        avatarImage: normalize(getProfileAvatarImage(data))
       };
     } catch (error) {
       console.error(error);
-      return { nickname: "", coin: 0 };
+      return {
+        nickname: "",
+        coin: 0,
+        avatarImage: ""
+      };
     }
   }
 
@@ -813,30 +841,37 @@ export function createGameUiRuntime(deps) {
         bgmAudio.preload = "auto";
         bgmAudio.loop = true;
       }
-      if (currentBgmKey !== kind || bgmAudio.src !== new URL(src, window.location.href).href) {
+      const nextSrc = new URL(src, window.location.href).href;
+      const srcChanged = bgmAudio.src !== nextSrc;
+      if (currentBgmKey !== kind || srcChanged) {
         bgmAudio.src = src;
         bgmAudio.currentTime = 0;
         currentBgmKey = kind;
       }
       bgmAudio.volume = clampVolume(getStoredVolumes().bgm) / 100;
-      bgmAudio.play().catch(function(error) {
-        console.error(error);
-      });
+      if (srcChanged || bgmAudio.paused) {
+        bgmAudio.play().catch(function(error) {
+          console.error(error);
+        });
+      }
     } catch (error) {
       console.error(error);
     }
   }
 
   function syncGameBgm(game) {
-    if (game && game.phase === "playing") {
-      if (game && game.revolution) {
+    if (!game) return;
+    if (game.phase === "playing") {
+      if (game.revolution) {
         playLoopBgm("revolution");
         return;
       }
       playLoopBgm("playing");
       return;
     }
-    stopBgm();
+    if (currentBgmKey === "revolution") {
+      playLoopBgm("playing");
+    }
   }
 
   function openAppSettings() {
@@ -933,6 +968,7 @@ export function createGameUiRuntime(deps) {
     const profile = await getLiveProfile(user);
     const nickname = getNicknameFromUser(user, profile);
     const coin = Number(profile.coin || 0);
+    const avatarImage = normalize(profile.avatarImage || "");
     if (playerNameInput) {
       playerNameInput.value = nickname;
       playerNameInput.readOnly = true;
@@ -945,13 +981,15 @@ export function createGameUiRuntime(deps) {
     if (loginInfoName) loginInfoName.textContent = displayName;
     if (loginInfoSub) loginInfoSub.textContent = displaySub;
     if (loginInfoPhoto) {
-      loginInfoPhoto.removeAttribute("src");
+      if (avatarImage) loginInfoPhoto.src = avatarImage;
+      else loginInfoPhoto.removeAttribute("src");
       loginInfoPhoto.style.display = "block";
     }
     if (roomLoginInfoName) roomLoginInfoName.textContent = displayName;
     if (roomLoginInfoSub) roomLoginInfoSub.textContent = displaySub;
     if (roomLoginInfoPhoto) {
-      roomLoginInfoPhoto.removeAttribute("src");
+      if (avatarImage) roomLoginInfoPhoto.src = avatarImage;
+      else roomLoginInfoPhoto.removeAttribute("src");
       roomLoginInfoPhoto.style.display = "block";
     }
     if (settingsNicknameInput) settingsNicknameInput.value = nickname;
@@ -1230,6 +1268,13 @@ export function createGameUiRuntime(deps) {
   function renderMembers(members, settings) {
     const list = mergeMembersWithCpu(members, settings);
     currentMembers = list;
+    const ownMember = list.find(function(member) { return member && member.id === playerId; }) || null;
+    if (ownMember) {
+      const coin = Number.isFinite(Number(ownMember.coin)) ? Number(ownMember.coin) : 0;
+      const displaySub = "コイン: " + coin;
+      if (loginInfoSub) loginInfoSub.textContent = displaySub;
+      if (roomLoginInfoSub) roomLoginInfoSub.textContent = displaySub;
+    }
     renderMembersUI(list);
   }
 
@@ -1623,10 +1668,12 @@ export function createGameUiRuntime(deps) {
     lastRuleEffectKey = "";
     lastBetStartEffectKey = "";
     lastOwnTurnSeKey = "";
+    lastShownResultOverlayKey = "";
     ruleEffectPlaying = false;
     currentMembers = [];
     currentGame = null;
     window.clearTimeout(resultOverlayTimer);
+    resultOverlayTimer = null;
     const resultOverlay = document.getElementById("matchResultOverlay");
     if (resultOverlay) {
       resultOverlay.style.setProperty("opacity", "0", "important");
@@ -1776,3 +1823,4 @@ export function createGameUiRuntime(deps) {
     }
   };
 }
+

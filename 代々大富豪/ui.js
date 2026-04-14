@@ -144,6 +144,10 @@ export function createUI(deps) {
     "都落ち": "img/main/都落ち.png"
   };
 
+  function getSeatAvatarImage(member) {
+    return member && typeof member.avatarImage === "string" ? member.avatarImage.trim() : "";
+  }
+
   function bindArenaElements() {
     fieldOwnerLabel = document.getElementById("fieldOwnerLabel");
     lastPlayList = document.getElementById("lastPlayList");
@@ -252,6 +256,14 @@ export function createUI(deps) {
       applySeatTurnVisual(seat, highlightedPlayerId === member.id);
       seat.classList.toggle("isMe", member.id === state.playerId);
       const coinLabel = seat.querySelector('[data-coin-label="1"]');
+      const avatarImage = seat.querySelector('[data-avatar-image="1"]');
+      const avatarEmpty = seat.querySelector('[data-avatar-empty="1"]');
+      const avatarSrc = getSeatAvatarImage(member);
+      if (avatarImage) {
+        if ((avatarImage.getAttribute("src") || "") !== avatarSrc) avatarImage.setAttribute("src", avatarSrc || "");
+        avatarImage.style.display = avatarSrc ? "block" : "none";
+      }
+      if (avatarEmpty) avatarEmpty.style.display = avatarSrc ? "none" : "flex";
       if (coinLabel) {
         const coinValue = Number.isFinite(Number(member.coin)) ? Number(member.coin) : 0;
         coinLabel.textContent = coinValue + "コイン";
@@ -494,8 +506,8 @@ export function createUI(deps) {
       roomPanel.style.height = "";
       return;
     }
-    const baseWidth = 1440;
-    const baseHeight = 900;
+    const baseWidth = 1560;
+    const baseHeight = 980;
     const scale = Math.min(window.innerWidth / baseWidth, window.innerHeight / baseHeight, 1);
     roomPanel.style.zoom = String(scale);
     roomPanel.style.width = (100 / scale) + "vw";
@@ -836,16 +848,16 @@ export function createUI(deps) {
     }
 
     if (!game) {
-      fieldOwnerLabel.textContent = "場は空です";
+      if (fieldOwnerLabel) if (fieldOwnerLabel) fieldOwnerLabel.textContent = "";
       effectStatusLabel.textContent = "待機中";
       lockStatusLabel.textContent = "縛りなし";
       const lockBadgeWrap = document.getElementById("lockBadgeWrap");
       if (lockBadgeWrap) lockBadgeWrap.innerHTML = buildLockBadgeHtml(null);
-      actionHintLabel.textContent = "開始待ち";
+      if (actionHintLabel) actionHintLabel.textContent = "開始待ち";
       actionHintMirror.textContent = "開始待ち";
       actionLogCache = [];
       lastRenderedActionText = "";
-      lastPlayList.innerHTML = '<div class="fieldEmpty">まだ場札はありません</div>';
+      if (lastPlayList) lastPlayList.innerHTML = "";
       updateSelectionPrompt(null);
       updateCountdownLabel();
       return;
@@ -858,19 +870,19 @@ export function createUI(deps) {
     if (lockBadgeWrap) lockBadgeWrap.innerHTML = buildLockBadgeHtml(game);
 
     if (game.lastPlay && Array.isArray(game.lastPlay.cards) && game.lastPlay.cards.length) {
-      fieldOwnerLabel.textContent = getMemberName(game.lastPlay.playerId) + " が出しました";
+      if (fieldOwnerLabel) fieldOwnerLabel.textContent = getMemberName(game.lastPlay.playerId) + " が出しました";
       lastPlayList.innerHTML = game.lastPlay.cards.map(function(card) {
         return '<div class="' + cardClass(card) + '" style="' + cardInlineStyle(card) + '">' + escapeHtml(cardText(card)) + '</div>';
       }).join("");
       animatePlayedCards(game);
     } else if (game.resolvedField && Array.isArray(game.resolvedField.cards) && game.resolvedField.cards.length) {
-      fieldOwnerLabel.textContent = getMemberName(game.resolvedField.playerId) + " の" + (game.resolvedField.reason || "直前の場");
+      if (fieldOwnerLabel) fieldOwnerLabel.textContent = getMemberName(game.resolvedField.playerId) + " の" + (game.resolvedField.reason || "直前の場");
       lastPlayList.innerHTML = game.resolvedField.cards.map(function(card) {
         return '<div class="' + cardClass(card) + '" style="' + cardInlineStyle(card) + '">' + escapeHtml(cardText(card)) + '</div>';
       }).join("");
     } else {
-      fieldOwnerLabel.textContent = "場は空です";
-      lastPlayList.innerHTML = '<div class="fieldEmpty">まだ場札はありません</div>';
+      if (fieldOwnerLabel) fieldOwnerLabel.textContent = "";
+      if (lastPlayList) lastPlayList.innerHTML = "";
     }
 
     const tradeResultNotice = getTradeResultNotice(game);
@@ -1163,7 +1175,7 @@ export function createUI(deps) {
     if (!list.length) {
       lastMembersLayoutKey = "";
       lastRenderedRoleStateKey = "";
-      membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="tableCenterTitle">TABLE CENTER</div><div class="tableCenterOwner" id="fieldOwnerLabel">場は空です</div><div class="fieldCards" id="lastPlayList"><div class="fieldEmpty">まだ場札はありません</div></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
+      membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="fieldCards" id="lastPlayList"></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
       bindArenaElements();
       applyRoomScale();
       updateStartButton();
@@ -1184,8 +1196,8 @@ export function createUI(deps) {
     lastRenderedRoleStateKey = "";
     const roleMap = getCachedRoleMap(list, state.currentLastResult, state.currentGame);
     const seatCount = list.length;
-    const radius = seatCount <= 2 ? 190 : seatCount <= 4 ? 220 : seatCount <= 6 ? 240 : 252;
-    const seatScale = seatCount <= 4 ? 1 : Math.max(0.8, 1 - ((seatCount - 4) * 0.05));
+    const radius = seatCount <= 2 ? 205 : seatCount <= 4 ? 245 : seatCount <= 6 ? 275 : 292;
+    const seatScale = seatCount <= 2 ? 0.95 : seatCount <= 4 ? 0.92 : Math.max(0.75, 0.89 - ((seatCount - 4) * 0.05));
     const seatWidth = Math.round(220 * seatScale);
     const seatHeight = Math.round(130 * seatScale);
     const seatTopHeight = Math.round(80 * seatScale);
@@ -1208,11 +1220,10 @@ export function createUI(deps) {
 
     const centerHtml = '<div class="arenaCenter">'
       + '<div class="tableCenter">'
-      + '<div class="tableCenterTitle">TABLE CENTER</div>'
       + '<div style="margin:6px 0 10px;" id="lockBadgeWrap">' + buildLockBadgeHtml(state.currentGame) + '</div>'
-      + '<div class="tableCenterOwner" id="fieldOwnerLabel">場は空です</div>'
-      + '<div class="fieldCards" id="lastPlayList"><div class="fieldEmpty">まだ場札はありません</div></div>'
+      + '<div class="fieldCards" id="lastPlayList"></div>'
       + '<div class="tableCenterSub" id="actionHintLabel">開始待ち</div>'
+      + '</div>'
       + '</div>';
 
     const rightHtml = '<div class="sideInfoCol">'
@@ -1249,16 +1260,21 @@ export function createUI(deps) {
         : '<div data-hand-empty-label="1" style="min-height:28px;display:flex;justify-content:center;align-items:center;font-size:11px;opacity:0.56;">なし</div>';
 
       const roleImageHtml = '<img data-role-image="1" src="' + escapeHtml(roleImageInfo.src || '') + '" alt="' + escapeHtml(roleImageInfo.label || '') + '" style="display:' + (roleImageInfo.src ? 'block' : 'none') + ';width:100%;height:100%;object-fit:fill;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.24));" />';
+      const avatarSrc = getSeatAvatarImage(member);
+      const avatarHtml = '<div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;background:rgba(255,255,255,0.04);">'
+        + '<img data-avatar-image="1" src="' + escapeHtml(avatarSrc || '') + '" alt="' + escapeHtml(member.name || 'アバター') + '" style="display:' + (avatarSrc ? 'block' : 'none') + ';width:100%;height:100%;object-fit:cover;" />'
+        + '<div data-avatar-empty="1" style="display:' + (avatarSrc ? 'none' : 'flex') + ';position:absolute;inset:0;align-items:center;justify-content:center;color:#f0f0f0;font-size:12px;font-weight:700;background:rgba(0,0,0,0.18);">&nbsp;</div>'
+        + '</div>';
       const finishStampHtml = getSeatFinishStampHtml(state.currentGame, state.currentLastResult, member.id, seatScale);
 
       const coinValue = Number.isFinite(Number(member.coin)) ? Number(member.coin) : 0;
-      const coinHtml = '<div data-coin-label="1" style="position:absolute;left:50%;top:-34px;transform:translateX(-50%);padding:4px 12px;border-radius:999px;border:1px solid rgba(255,220,120,0.42);background:rgba(35,24,8,0.92);color:#ffe8a8;font-size:' + Math.max(11, Math.round(13 * seatScale)) + 'px;font-weight:900;letter-spacing:0.04em;line-height:1;white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,0.22);pointer-events:none;z-index:4;">' + escapeHtml(String(coinValue) + 'コイン') + '</div>';
+      const coinHtml = '<div data-coin-label="1" style="position:absolute;left:50%;bottom:-34px;transform:translateX(-50%);padding:4px 12px;border-radius:999px;border:1px solid rgba(255,220,120,0.42);background:rgba(35,24,8,0.92);color:#ffe8a8;font-size:' + Math.max(11, Math.round(13 * seatScale)) + 'px;font-weight:900;letter-spacing:0.04em;line-height:1;white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,0.22);pointer-events:none;z-index:4;">' + escapeHtml(String(coinValue) + 'コイン') + '</div>';
 
       return '<div class="seatCard' + (isMe ? ' isMe' : '') + '" data-player-id="' + escapeHtml(member.id) + '"' + seatClickable + ' style="--seat-x:' + x.toFixed(1) + 'px;--seat-y:' + y.toFixed(1) + 'px;width:' + seatWidth + 'px;height:' + seatHeight + 'px;padding:0;border-radius:0;border:' + seatBorder + 'px solid rgba(255,255,255,0.9);box-shadow:0 8px 18px rgba(0,0,0,0.26);background:rgba(0,0,0,0.28);overflow:visible;">'
         + coinHtml
         + finishStampHtml
         + '<div style="display:grid;grid-template-columns:' + avatarSize + 'px 1fr;grid-template-rows:' + nameHeight + 'px ' + roleHeight + 'px;height:' + seatTopHeight + 'px;border-bottom:' + seatBorder + 'px solid #000;background:rgba(0,0,0,0.28);">'
-        + '<div style="grid-column:1;grid-row:1 / span 2;border-right:' + seatBorder + 'px solid #000;display:flex;align-items:center;justify-content:center;color:#f0f0f0;font-size:12px;font-weight:700;background:rgba(0,0,0,0.18);">&nbsp;</div>'
+        + '<div style="grid-column:1;grid-row:1 / span 2;border-right:' + seatBorder + 'px solid #000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.18);">' + avatarHtml + '</div>'
         + '<div style="grid-column:2;grid-row:1;border-bottom:' + seatBorder + 'px solid #000;display:flex;align-items:center;justify-content:center;padding:0 10px;color:#f5f5f5;font-size:' + seatNameFontSize + 'px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:rgba(0,0,0,0.18);">' + escapeHtml(member.name || '名無し') + '</div>'
         + '<div style="grid-column:2;grid-row:2;padding:6px 10px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.18);">'
         + '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">' + roleImageHtml + '</div>'
@@ -1356,18 +1372,18 @@ export function createUI(deps) {
     roomWordLabel.textContent = "-";
     gamePhaseLabel.textContent = "待機中";
     turnInfoLabel.textContent = "-";
-    fieldOwnerLabel.textContent = "場は空です";
+    if (fieldOwnerLabel) fieldOwnerLabel.textContent = "";
     effectStatusLabel.textContent = "待機中";
     lockStatusLabel.textContent = "縛りなし";
-    actionHintLabel.textContent = "開始待ち";
+    if (actionHintLabel) actionHintLabel.textContent = "開始待ち";
     actionHintMirror.textContent = "開始待ち";
     lastAnimatedPlayKey = "";
     lastAnimatedTransferKey = "";
     lastDirectionEffectKey = "";
     myHandCount.textContent = "0枚";
     myHandList.innerHTML = '<div class="handEmpty">ゲーム開始で手札が配られます</div>';
-    lastPlayList.innerHTML = '<div class="fieldEmpty">まだ場札はありません</div>';
-    membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="tableCenterTitle">TABLE CENTER</div><div class="tableCenterOwner" id="fieldOwnerLabel">場は空です</div><div class="fieldCards" id="lastPlayList"><div class="fieldEmpty">まだ場札はありません</div></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
+    if (lastPlayList) lastPlayList.innerHTML = "";
+    membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="fieldCards" id="lastPlayList"></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
     bindArenaElements();
     settingsButton.classList.add("hidden");
     settingsPanel.classList.add("hidden");
@@ -1473,3 +1489,4 @@ export function createUI(deps) {
     updateStartButton
   };
 }
+

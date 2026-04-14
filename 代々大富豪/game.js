@@ -375,13 +375,15 @@ async function joinRoom(playerName, word) {
       const liveUserData = await getUserData(currentAuthUser);
       memberMeta = {
         authUid: currentAuthUser.uid || "",
-        coin: Number.isFinite(Number(liveUserData && liveUserData.coin)) ? Number(liveUserData.coin) : 0,
+        coin: Number.isFinite(Number(liveUserData && liveUserData.coin)) ? Number(liveUserData && liveUserData.coin) : 0,
+        avatarImage: String((liveUserData && liveUserData.selectedAvatarImage) || "").trim(),
       };
     } catch (error) {
       console.error(error);
       memberMeta = {
         authUid: currentAuthUser.uid || "",
         coin: 0,
+        avatarImage: "",
       };
     }
   }
@@ -538,7 +540,9 @@ async function applyPass(actorId) {
 
 async function applySevenTransfer(actorId, cardIds) {
   await runRoomTransaction(function(roomData) {
-    return mutatePlay(roomData, actorId, cardIds, currentGame && currentGame.phase === "trading" ? "trade" : "transfer");
+    const roomGame = roomData && roomData.gameData && typeof roomData.gameData === "object" ? roomData.gameData : null;
+    const action = roomGame && roomGame.phase === "trading" ? "trade" : "transfer";
+    return mutatePlay(roomData, actorId, cardIds, action);
   });
 }
 
@@ -687,3 +691,4 @@ onUserChanged(function(user) {
 });
 
 gameUiRuntime.setRoomWord(roomWord);
+

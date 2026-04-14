@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -68,6 +69,7 @@
     }
 
     .roomPanel {
+      position: relative;
       width: min(100%, 860px);
       height: min(100dvh - 28px, 920px);
       overflow: hidden;
@@ -199,10 +201,10 @@
       height: 34px;
     }
     body.inRoom .loginInfoName {
-      font-size: 13px;
+      font-size: 10px;
     }
     body.inRoom .loginInfoSub {
-      font-size: 11px;
+      font-size: 10px;
     }
     .titleWrap { text-align: center; margin-bottom: 28px; }
     .crest {
@@ -238,7 +240,7 @@
       margin-bottom: 6px;
     }
 
-    .form, .settingsList { display: grid; gap: 12px; }
+    .form, .settingsList { display: grid; gap: 14px; }
     .membersList {
       position: relative;
       min-height: 360px;
@@ -277,7 +279,7 @@
     }
     .sideInfoCard strong {
       display: block;
-      font-size: 13px;
+      font-size: 10px;
       line-height: 1.25;
       color: var(--text);
       word-break: break-word;
@@ -393,7 +395,7 @@
       min-width: 52px;
       padding: 4px 8px;
       border-radius: 999px;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 900;
       color: #fff1b5;
       border: 1px solid rgba(246,196,83,0.28);
@@ -405,7 +407,7 @@
       background: rgba(255,255,255,0.08);
     }
     .field { display: grid; gap: 8px; }
-    label { font-size: 14px; font-weight: 800; color: var(--accent-2); letter-spacing: 0.02em; }
+    label { font-size: 12px; font-weight: 800; color: var(--accent-2); letter-spacing: 0.02em; }
     input[type="text"] {
       width: 100%;
       height: 58px;
@@ -426,7 +428,7 @@
 
     button {
       width: 100%;
-      height: 60px;
+      height: 48px;
       border: 0;
       border-radius: 18px;
       font-size: 18px;
@@ -489,38 +491,220 @@
     }
     .miniInfoCard strong {
       display: block;
-      font-size: 13px;
+      font-size: 10px;
       line-height: 1.2;
       word-break: break-word;
       color: var(--text);
     }
 
-    .roomInfoCard, .memberCard, .settingsPanel, .fieldPanel, .myHandSection, .settingItem {
-      border-radius: 18px;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.06);
-    }
-    .settingItem {
+    .roomInfoCard, .memberCard, .fieldPanel, .myHandSection, .settingItem {
       position: relative;
       cursor: pointer;
       transition: background 0.18s ease, border-color 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
     }
+    .settingsCategory {
+      min-height: 0;
+      display: grid;
+      align-content: start;
+      gap: 5px;
+      padding: 8px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+    }
+    .settingsCategory + .settingsCategory {
+      margin-top: 0;
+    }
+    .settingsCategoryHead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 2px;
+    }
+    .settingsCategoryTitle {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.2;
+      color: var(--accent-2);
+      letter-spacing: 0.04em;
+    }
+    .settingsCategorySub {
+      font-size: 10px;
+      color: rgba(248,245,255,0.56);
+      white-space: nowrap;
+    }
+    .settingsTileGrid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 5px;
+    }
+    .settingsTileGrid.threeCols {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .settingsTileGrid.twoCols {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .settingTile {
+      min-height: 46px;
+      padding: 6px 5px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(12,8,24,0.78);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-align: center;
+    }
+    .settingTile .settingName {
+      margin: 0;
+      font-size: 10px;
+      line-height: 1.05;
+      font-weight: 900;
+      color: rgba(248,245,255,0.72);
+      word-break: break-word;
+    }
+    .settingTile .settingSub {
+      display: none;
+    }
+    .settingTile.systemTile {
+      min-height: 56px;
+    }
+    .settingWideCard {
+      min-height: 56px;
+      padding: 6px 5px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(12,8,24,0.78);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+      display: grid;
+      gap: 8px;
+      align-content: center;
+      justify-items: center;
+      text-align: center;
+    }
+    .settingWideCard .settingName {
+      margin: 0;
+      font-size: 10px;
+      line-height: 1.05;
+      font-weight: 900;
+      color: rgba(248,245,255,0.72);
+    }
+    .settingWideCard .settingSub {
+      display: block;
+      margin: 0;
+      font-size: 9px;
+      line-height: 1.05;
+      color: rgba(248,245,255,0.44);
+    }
+    .settingCpuControls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+    }
+    .settingCpuControls .secondaryButton {
+      min-width: 0;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border-radius: 10px;
+    }
+    .settingCpuControls .choicePill {
+      min-width: 30px;
+      height: 26px;
+      padding: 0 6px;
+      border-radius: 10px;
+      font-size: 10px;
+    }
+    .settingsCountGrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 5px;
+    }
+    .settingOptionCard {
+      min-height: 56px;
+      padding: 6px 5px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(12,8,24,0.78);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+    }
+    .settingOptionCard .choiceOption {
+      width: 100%;
+      display: block;
+    }
+    .settingOptionCard .choicePill {
+      width: 100%;
+      min-width: 0;
+      height: 40px;
+      border-radius: 12px;
+      border: 0;
+      background: transparent;
+      color: rgba(248,245,255,0.72);
+    }
+    .settingOptionCard.passiveOption {
+      opacity: 1;
+      border-color: rgba(255,255,255,0.1);
+      background: rgba(12,8,24,0.78);
+    }
+    .settingOptionTitle {
+      margin: 0 0 2px;
+      font-size: 11px;
+      line-height: 1.05;
+      font-weight: 900;
+      color: rgba(248,245,255,0.72);
+    }
+    .settingOptionSub {
+      margin: 0;
+      font-size: 9px;
+      line-height: 1.05;
+      color: rgba(248,245,255,0.44);
+    }
     .settingItem:hover {
       transform: translateY(-1px);
+      border-color: rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.08);
     }
-    .settingItem.settingOff {
-      background: rgba(0,0,0,0.34);
-      border-color: rgba(255,255,255,0.08);
-    }
-    .settingItem.settingOn {
-      background: rgba(246,196,83,0.12);
-      border-color: rgba(246,196,83,0.28);
-    }
-    .settingItem.settingOff .settingName,
     .settingItem.settingOff .settingSub {
       opacity: 0.72;
     }
-    .roomInfoCard, .fieldPanel, .settingsPanel, .myHandSection { padding: 14px 16px; }
+    .settingItem:has(input:checked),
+    .settingWideCard:has(input:checked),
+    .settingOptionCard:has(input:checked) {
+      border-color: rgba(246,196,83,0.55);
+      background: linear-gradient(145deg, rgba(246,196,83,0.22), rgba(255,227,154,0.12));
+      box-shadow: 0 0 0 1px rgba(246,196,83,0.18), 0 0 22px rgba(246,196,83,0.16), inset 0 0 0 1px rgba(255,255,255,0.04);
+    }
+    .settingItem:has(input:checked) .settingName,
+    .settingWideCard:has(input:checked) .settingName,
+    .settingWideCard:has(input:checked) .settingSub,
+    .settingOptionCard:has(input:checked) .choicePill,
+    .settingOptionCard:has(input:checked) .settingOptionTitle,
+    .settingOptionCard:has(input:checked) .settingOptionSub {
+      color: #fff3c4;
+    }
+    .settingOptionCard.passiveOption .settingOptionTitle,
+    .settingOptionCard.passiveOption .settingOptionSub {
+      color: rgba(248,245,255,0.72);
+    }
+    .settingItem:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.08);
+    }
+    .settingItem.settingOff .settingSub {
+      opacity: 0.72;
+    }
+    .roomInfoCard, .fieldPanel, .myHandSection { padding: 14px 16px; }
     .settingItem, .memberCard {
       display: flex;
       align-items: center;
@@ -530,7 +714,7 @@
     }
     .roomInfoCard span, .fieldSub, .settingSub, .memberMeta, .notice, .rulesText {
       margin: 0 0 4px;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 800;
       letter-spacing: 0.03em;
       color: rgba(248,245,255,0.66);
@@ -569,11 +753,11 @@
       border-radius: 16px;
       border: 1px solid rgba(255,255,255,0.12);
       background: rgba(255,255,255,0.08);
-      font-size: 14px;
+      font-size: 12px;
       line-height: 1.5;
     }
 
-    .fieldCards, .handList { display: flex; flex-wrap: wrap; gap: 8px; min-height: 60px; }
+    .fieldCards, .handList { display: flex; flex-wrap: wrap; gap: 8px; min-height: 48px; }
     .handList {
       max-height: 150px;
       overflow: auto;
@@ -680,35 +864,29 @@
     .badgeGuest { color: #d9fff1; }
 
 
-    .switch { position: relative; width: 56px; height: 32px; flex-shrink: 0; }
-    .switch input, .choiceOption input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-    .slider {
+    .switch {
       position: absolute;
       inset: 0;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.18);
-      border: 1px solid rgba(255,255,255,0.14);
-    }
-    .slider::after {
-      content: "";
-      position: absolute;
-      top: 3px;
-      left: 3px;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: #fff;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.22);
-      transition: transform 0.2s ease;
-    }
-    .switch input:checked + .slider { background: rgba(246,196,83,0.3); border-color: rgba(246,196,83,0.45); }
-    .settingItem .switch {
+      width: 100%;
+      height: 100%;
+      opacity: 0;
       pointer-events: none;
     }
-    .switch input:checked + .slider::after { transform: translateX(24px); }
-    .switch input:disabled + .slider, .choiceOption input:disabled + .choicePill { opacity: 0.55; cursor: not-allowed; }
+    .switch input, .choiceOption input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      margin: 0;
+      cursor: pointer;
+    }
+    .slider {
+      display: none;
+    }
 
-    .choiceOption { position: relative; flex-shrink: 0; }
+    .choiceOption {
+      position: relative;
+      flex-shrink: 0;
+    }
     .choicePill {
       min-width: 74px;
       height: 40px;
@@ -716,13 +894,13 @@
       display: grid;
       place-items: center;
       border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.14);
-      background: rgba(255,255,255,0.08);
-      color: var(--text);
-      font-size: 14px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: rgba(248,245,255,0.72);
+      font-size: 12px;
       font-weight: 900;
     }
-    .choiceOption input:checked + .choicePill { color: #fff1b5; border-color: rgba(246,196,83,0.45); background: rgba(246,196,83,0.22); }
+    .choiceOption input:disabled + .choicePill { opacity: 0.55; cursor: not-allowed; }
 
     .guestLocked .roomInfo, .guestLocked .statusGrid, .guestLocked .membersList, .guestLocked .myHandSection, .guestLocked .fieldPanel {
       pointer-events: none;
@@ -803,6 +981,7 @@
       width: min(100%, 560px);
       max-height: min(88dvh, 820px);
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 22px 18px 18px;
       border-radius: 24px;
       border: 1px solid rgba(255,255,255,0.12);
@@ -820,51 +999,39 @@
       margin: 0;
       font-size: 22px;
       line-height: 1.2;
+      font-weight: 900;
+      color: #f8f5ff;
     }
     .settingsModalClose {
-      width: 42px;
-      min-width: 42px;
-      height: 42px;
-      padding: 0;
-      border-radius: 12px;
-      color: var(--text);
+      width: auto;
+      min-width: 92px;
+      height: 48px;
+      padding: 0 16px;
+      border-radius: 14px;
+      color: #f8f5ff;
       background: rgba(255,255,255,0.08);
       border: 1px solid rgba(255,255,255,0.14);
-      font-size: 20px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      font-size: 16px;
+      font-weight: 900;
     }
     .settingsSection {
-      padding: 14px;
+      padding: 14px 16px;
       border-radius: 18px;
       border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.06);
     }
     .settingsSection + .settingsSection {
       margin-top: 12px;
     }
     .settingsSectionHead {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
     .settingsSectionTitle {
       margin: 0;
-      font-size: 18px;
-      line-height: 1.2;
-    }
-    .settingsSectionSub {
-      margin: 4px 0 0;
-      font-size: 12px;
-      color: rgba(248,245,255,0.68);
-      line-height: 1.45;
-    }
-    .volumeRow {
-      display: grid;
-      gap: 6px;
+      font-size: 14px;
+      font-weight: 800;
+      color: #ffe39a;
+      letter-spacing: 0.02em;
     }
     .volumeRow + .volumeRow {
       margin-top: 12px;
@@ -873,118 +1040,50 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 12px;
+      margin-bottom: 10px;
       font-size: 14px;
       font-weight: 800;
-      color: var(--text);
+      color: #f8f5ff;
     }
     .volumeValue {
+      min-width: 44px;
+      text-align: right;
       font-size: 13px;
+      font-weight: 800;
       color: rgba(248,245,255,0.78);
     }
     .volumeSlider {
       width: 100%;
-      accent-color: #f6c453;
-      cursor: pointer;
     }
     .renameField {
       display: grid;
-      gap: 8px;
-      margin-top: 10px;
+      gap: 10px;
+      margin-bottom: 12px;
     }
-    .renamePrice {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 86px;
-      padding: 7px 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(246,196,83,0.28);
-      background: rgba(246,196,83,0.14);
-      color: #fff1b5;
+    .renameField label {
       font-size: 12px;
-      font-weight: 900;
-      white-space: nowrap;
+      font-weight: 800;
+      color: #ffe39a;
+      letter-spacing: 0.02em;
     }
     .settingsSaveButton {
       width: 100%;
-      margin-top: 10px;
+      height: 46px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 14px;
+      background: linear-gradient(90deg, #7dd3fc, #a5b4fc);
+      color: #08111f;
+      font-size: 15px;
+      font-weight: 900;
     }
     .settingsStatus {
       min-height: 20px;
       margin-top: 10px;
-      font-size: 12px;
-      line-height: 1.45;
+      font-size: 13px;
       color: rgba(248,245,255,0.78);
     }
-
     @media (max-width: 640px) {
-      .screen { padding: 14px; gap: 12px; }
-      .entryTopBar { width: 100%; gap: 8px; }
-      .gearButton { width: 44px; min-width: 44px; height: 44px; border-radius: 14px; font-size: 20px; }
-      .panel { padding: 28px 18px 22px; border-radius: 22px; }
-      .roomInfo, .statusGrid, .fieldMeta { grid-template-columns: 1fr; }
-      .roomButtons, .actionBar, .handActionRow { width: 100%; }
-      .leaveButton, .settingsButton, .actionButton { flex: 1 1 0; min-width: 0; height: 44px; }
-      input[type="text"], button { height: 56px; }
-      .settingItem, .memberCard { align-items: flex-start; }
-      .membersList {
-        min-height: 420px;
-        grid-template-columns: 1fr;
-        padding: 10px;
-      }
-      .membersList::before {
-        width: min(78vw, 240px);
-        height: min(78vw, 240px);
-      }
-      .sideInfoCol {
-        display: none;
-      }
-      .arenaCenter {
-        min-height: 400px;
-      }
-      body.inRoom .membersList {
-        height: calc(100dvh - 142px);
-        min-height: 0;
-      }
-      body.inRoom .arenaCenter {
-        min-height: 100%;
-      }
-      .tableCenter {
-        width: min(48vw, 170px);
-        min-height: 120px;
-        padding: 10px 8px;
-      }
-      .seatCard {
-        width: 92px;
-        min-width: 92px;
-        padding: 7px 5px;
-      }
-      .seatName { font-size: 11px; }
-      .seatMeta { font-size: 9px; }
-      .topInfoBar { margin-bottom: 4px; }
-      .miniInfoStack { max-width: 100%; gap: 6px; }
-      .compactLine {
-        flex-direction: row;
-        align-items: center;
-      }
-      .compactStatus {
-        gap: 6px;
-      }
-      .handList {
-        max-height: 132px;
-      }
-      body.inRoom .handList {
-        max-height: 74px;
-      }
-      body.inRoom .leaveButton,
-      body.inRoom .settingsButton,
-      body.inRoom .actionButton {
-        height: 38px;
-      }
-      .settingsOverlay {
-        padding: 12px;
-      }
       .settingsModal {
         padding: 18px 14px 14px;
         border-radius: 20px;
@@ -1082,6 +1181,7 @@
       </section>
 
       <section class="settingsPanel hidden" id="settingsPanel" aria-label="ゲーム設定">
+        <div class="settingsScreen">
         <div class="settingsHead">
           <div>
             <div class="roomMini">GAME SETTINGS</div>
@@ -1089,25 +1189,92 @@
           </div>
           <div class="settingsBadge">親だけ変更可</div>
         </div>
-        <div class="settingsList">
-          <div class="settingItem" data-setting-target="eightCutToggle"><div><div class="settingName">8切</div><div class="settingSub">8を出した時に場を流す</div></div><label class="switch"><input id="eightCutToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="ninetyNineCarToggle"><div><div class="settingName">99車</div><div class="settingSub">9を2枚出した時に場を流す</div></div><label class="switch"><input id="ninetyNineCarToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="revolutionToggle"><div><div class="settingName">革命</div><div class="settingSub">4枚以上で強さを反転する</div></div><label class="switch"><input id="revolutionToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="stairsToggle"><div><div class="settingName">階段</div><div class="settingSub">同じマークの連番を出せる</div></div><label class="switch"><input id="stairsToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="stairsRevolutionToggle"><div><div class="settingName">階段革命</div><div class="settingSub">4枚以上の階段で強さを反転する</div></div><label class="switch"><input id="stairsRevolutionToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="lockToggle"><div><div class="settingName">ロック</div><div class="settingSub">同じマーク並びでスートを固定する</div></div><label class="switch"><input id="lockToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="numberLockToggle"><div><div class="settingName">数字ロック</div><div class="settingSub">同じ数字並びで数字条件を固定する</div></div><label class="switch"><input id="numberLockToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="skipFiveToggle"><div><div class="settingName">5飛ばし</div><div class="settingSub">5を含むと次の人を飛ばす</div></div><label class="switch"><input id="skipFiveToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="tenDumpToggle"><div><div class="settingName">10捨て</div><div class="settingSub">10を出した枚数ぶん追加で捨てる</div></div><label class="switch"><input id="tenDumpToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="jackBackToggle"><div><div class="settingName">11バック</div><div class="settingSub">Jを含むと場が流れるまで反転する</div></div><label class="switch"><input id="jackBackToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="spadeThreeReturnToggle"><div><div class="settingName">スペ3返し</div><div class="settingSub">ジョーカー単体にスペード3で返せる</div></div><label class="switch"><input id="spadeThreeReturnToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="sixReverseToggle"><div><div class="settingName">6リバース</div><div class="settingSub">6を含むと順番を反転する</div></div><label class="switch"><input id="sixReverseToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="sevenPassToggle"><div><div class="settingName">7渡し</div><div class="settingSub">7を含むと次の人に手札を渡す</div></div><label class="switch"><input id="sevenPassToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="miyakoOchiToggle"><div><div class="settingName">都落ち</div><div class="settingSub">前回1位が今回最初に上がれないと都落ち扱い</div></div><label class="switch"><input id="miyakoOchiToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="doubleDeckToggle"><div><div class="settingName">トランプ2セット 104枚</div><div class="settingSub">2セットで山札を作る</div></div><label class="switch"><input id="doubleDeckToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem" data-setting-target="foulAgariToggle"><div><div class="settingName">反則上がり</div><div class="settingSub">8・ジョーカー・通常時の2・反転中の3を含んで上がれなくする</div></div><label class="switch"><input id="foulAgariToggle" type="checkbox" /><span class="slider"></span></label></div>
-          <div class="settingItem"><div><div class="settingName">CPU人数</div><div class="settingSub">親が開始前にCPUを増減できます</div></div><div class="choiceGroup"><button class="secondaryButton" id="cpuRemoveButton" type="button">CPU−</button><div class="choicePill" id="cpuCountLabel">0</div><button class="secondaryButton" id="cpuAddButton" type="button">CPU＋</button></div></div>
-          <div class="settingItem"><div><div class="settingName">持ち時間</div><div class="settingSub">時間切れなら自動で処理する</div></div><div class="choiceGroup"><label class="choiceOption"><input id="turnTime30" name="turnTime" type="radio" value="30" /><span class="choicePill">30秒</span></label><label class="choiceOption"><input id="turnTime15" name="turnTime" type="radio" value="15" /><span class="choicePill">15秒</span></label></div></div>
+        <div class="settingsScreenBody">
+          <div class="settingsColumn">
+          <div class="settingsList">
+          <section class="settingsCategory" aria-label="ルール設定グループ">
+            <div class="settingsCategoryHead">
+              <h4 class="settingsCategoryTitle">ルール</h4>
+              <div class="settingsCategorySub">5個 × 3行</div>
+            </div>
+            <div class="settingsTileGrid">
+              <div class="settingItem settingTile" data-setting-target="eightCutToggle"><div class="settingName">8切</div><label class="switch"><input id="eightCutToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="ninetyNineCarToggle"><div class="settingName">99車</div><label class="switch"><input id="ninetyNineCarToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="revolutionToggle"><div class="settingName">革命</div><label class="switch"><input id="revolutionToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="stairsToggle"><div class="settingName">階段</div><label class="switch"><input id="stairsToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="stairsRevolutionToggle"><div class="settingName">階段革命</div><label class="switch"><input id="stairsRevolutionToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="lockToggle"><div class="settingName">マーク縛り</div><label class="switch"><input id="lockToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="numberLockToggle"><div class="settingName">数字縛り</div><label class="switch"><input id="numberLockToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="skipFiveToggle"><div class="settingName">5飛ばし</div><label class="switch"><input id="skipFiveToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="tenDumpToggle"><div class="settingName">10捨て</div><label class="switch"><input id="tenDumpToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="jackBackToggle"><div class="settingName">Jバック</div><label class="switch"><input id="jackBackToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="spadeThreeReturnToggle"><div class="settingName">スペ3返し</div><label class="switch"><input id="spadeThreeReturnToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="sixReverseToggle"><div class="settingName">6リバース</div><label class="switch"><input id="sixReverseToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile" data-setting-target="sevenPassToggle"><div class="settingName">7渡し</div><label class="switch"><input id="sevenPassToggle" type="checkbox" /><span class="slider"></span></label></div>
+            </div>
+          </section>
+          </div>
+          </div>
+
+          <div class="settingsColumn">
+          <section class="settingsCategory" aria-label="システム設定グループ">
+            <div class="settingsCategoryHead">
+              <h4 class="settingsCategoryTitle">システム</h4>
+              <div class="settingsCategorySub">3個</div>
+            </div>
+            <div class="settingsTileGrid threeCols">
+              <div class="settingItem settingTile systemTile" data-setting-target="miyakoOchiToggle"><div class="settingName">都落ち</div><label class="switch"><input id="miyakoOchiToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile systemTile" data-setting-target="foulAgariToggle"><div class="settingName">反則上がり</div><label class="switch"><input id="foulAgariToggle" type="checkbox" /><span class="slider"></span></label></div>
+              <div class="settingItem settingTile systemTile"><div class="settingName">CPU</div><div class="settingCpuControls"><button class="secondaryButton" id="cpuRemoveButton" type="button">−</button><div class="choicePill" id="cpuCountLabel">0</div><button class="secondaryButton" id="cpuAddButton" type="button">＋</button></div></div>
+            </div>
+          </section>
+
+          <section class="settingsCategory" aria-label="カード枚数設定グループ">
+            <div class="settingsCategoryHead">
+              <h4 class="settingsCategoryTitle">カード枚数</h4>
+              <div class="settingsCategorySub">2個</div>
+            </div>
+            <input id="doubleDeckToggle" type="checkbox" hidden />
+            <div class="settingsCountGrid">
+              <div class="settingOptionCard settingItem" onclick="(function(){ const a=document.getElementById('doubleDeck54'); const b=document.getElementById('doubleDeckToggle'); if(a) a.checked=true; if(b){ b.checked=false; b.dispatchEvent(new Event('change',{bubbles:true})); } })();">
+                <label class="choiceOption">
+                  <input id="doubleDeck54" name="cardCount" type="radio" value="54" checked />
+                  <span class="choicePill">
+                    <span>
+                      <span class="settingOptionTitle">54枚</span>
+                      <span class="settingOptionSub">通常</span>
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <div class="settingOptionCard settingItem" onclick="(function(){ const a=document.getElementById('doubleDeck108'); const b=document.getElementById('doubleDeckToggle'); if(a) a.checked=true; if(b){ b.checked=true; b.dispatchEvent(new Event('change',{bubbles:true})); } })();">
+                <label class="choiceOption">
+                  <input id="doubleDeck108" name="cardCount" type="radio" value="108" />
+                  <span class="choicePill">
+                    <span>
+                      <span class="settingOptionTitle">108枚</span>
+                      <span class="settingOptionSub">2組</span>
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          </div>
+          <div class="settingsColumn">
+          <section class="settingsCategory" aria-label="時間設定グループ">
+            <div class="settingsCategoryHead">
+              <h4 class="settingsCategoryTitle">時間</h4>
+              <div class="settingsCategorySub">2個</div>
+            </div>
+            <div class="settingsCountGrid">
+              <div class="settingOptionCard"><label class="choiceOption"><input id="turnTime30" name="turnTime" type="radio" value="30" checked /><span class="choicePill">30秒</span></label></div>
+              <div class="settingOptionCard"><label class="choiceOption"><input id="turnTime15" name="turnTime" type="radio" value="15" /><span class="choicePill">15秒</span></label></div>
+            </div>
+          </section>
+          </div>
+        </div>
         </div>
       </section>
 
@@ -1139,7 +1306,6 @@
     <section class="settingsModal" aria-label="設定画面">
       <div class="settingsModalHead">
         <div>
-          <div class="roomMini">APP SETTINGS</div>
           <h2 class="settingsModalTitle">設定</h2>
         </div>
         <button class="settingsModalClose" id="appSettingsCloseButton" type="button" aria-label="閉じる">×</button>
@@ -1175,7 +1341,6 @@
           </div>
         </div>
         <div class="renameField">
-          <label for="settingsNicknameInput">新しい名前</label>
           <input id="settingsNicknameInput" type="text" maxlength="20" autocomplete="nickname" />
         </div>
         <button class="settingsSaveButton" id="saveNicknameButton" type="button">名前を変更する</button>
@@ -1188,3 +1353,4 @@
   <script type="module" src="./game.js"></script>
 </body>
 </html>
+

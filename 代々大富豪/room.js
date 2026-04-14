@@ -1,5 +1,36 @@
 import { app, getCurrentUser } from "../shared/firebase.js";
 import { getUserData } from "../shared/userDate.js";
+
+const AVATAR_IMAGE_MAP = {
+  avatar_1: "/img/アバター/1-虹靴.png",
+  avatar_2: "/img/アバター/2-古い野球玉.png",
+  avatar_3: "/img/アバター/3-焼きちくわ.png",
+  avatar_4: "/img/アバター/4-ブルーアップル.png",
+  avatar_5: "/img/アバター/5-チーズ.png",
+  avatar_6: "/img/アバター/6-カラースプレー.png",
+  avatar_41: "/img/アバター/41-ネズミ.png",
+  avatar_42: "/img/アバター/42-ピンクカエル.png",
+  avatar_43: "/img/アバター/43-タバコマン.png",
+  avatar_44: "/img/アバター/44-凶悪アヒル.png",
+  avatar_71: "/img/アバター/71-素ゴリ.png",
+  avatar_72: "/img/アバター/72-素りな.png",
+  avatar_73: "/img/アバター/73-素めそ.png",
+  avatar_91: "/img/アバター/91-カエルゴリ.png",
+  avatar_92: "/img/アバター/92-カエルりな.png",
+  avatar_93: "/img/アバター/93-カエルめそ.png"
+};
+
+function normalizeAvatarId(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "default") return "";
+  const matched = raw.match(/([0-9]+)/);
+  return matched ? ("avatar_" + String(Number(matched[1]))) : raw;
+}
+
+function getAvatarImageFromUserData(data) {
+  const avatarId = normalizeAvatarId(data && data.selectedAvatar);
+  return avatarId && AVATAR_IMAGE_MAP[avatarId] ? AVATAR_IMAGE_MAP[avatarId] : "";
+}
 import { getDatabase, ref, set, get, update, remove, onValue, onDisconnect, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
 let serverTimeOffsetMs = 0;
@@ -79,8 +110,7 @@ export function toMemberList(members) {
       isHost: !!(entry[1] && entry[1].isHost),
       authUid: entry[1] && entry[1].authUid ? entry[1].authUid : "",
       coin: entry[1] && Number.isFinite(Number(entry[1].coin)) ? Number(entry[1].coin) : 0,
-      connected: entry[1] ? entry[1].connected !== false : true,
-      disconnectedAtMs: entry[1] && Number.isFinite(Number(entry[1].disconnectedAtMs)) ? Number(entry[1].disconnectedAtMs) : 0,
+      avatarImage: entry[1] && typeof entry[1].avatarImage === "string" ? entry[1].avatarImage : "",
     };
   }).sort(function(a, b) {
     if (!!a.isHost !== !!b.isHost) return a.isHost ? -1 : 1;
@@ -110,7 +140,8 @@ export function createCpuMembers(cpuCount) {
       isHost: false,
       isCpu: true,
       authUid: "cpu_" + i,
-      coin: 100
+      coin: 100,
+      avatarImage: ""
     });
   }
   return list;
@@ -287,6 +318,7 @@ export function createRoomManager(options) {
       }
       await update(ref(db, roomPath + "/" + roomId + "/members/" + playerId), {
         coin: nextCoin,
+        avatarImage: getAvatarImageFromUserData(liveUserData),
         updatedAtMs: nowMs(),
       });
       lastSyncedOwnCoin = nextCoin;
@@ -349,24 +381,21 @@ export function createRoomManager(options) {
           resolvedMeta = {
             authUid: authUser.uid || "",
             coin: Number.isFinite(Number(liveUserData && liveUserData.coin)) ? Number(liveUserData.coin) : 0,
+            avatarImage: getAvatarImageFromUserData(liveUserData),
           };
         } catch (error) {
           console.error(error);
           resolvedMeta = {
             authUid: authUser.uid || "",
             coin: 0,
+            avatarImage: "",
           };
         }
       }
     }
     const safeMeta = resolvedMeta && typeof resolvedMeta === "object" ? resolvedMeta : {};
     const amHostPlayer = memberList.length === 0;
-    onDisconnect(memberRef).update({
-      connected: false,
-      disconnectedAtMs: serverTimestamp(),
-      disconnectedAtMsValue: nowMs(),
-      updatedAtMs: nowMs(),
-    });
+    onDisconnect(memberRef).remove();
     await set(memberRef, {
       name: playerName,
       isHost: amHostPlayer,
@@ -374,9 +403,7 @@ export function createRoomManager(options) {
       joinedAtMs: nowMs(),
       authUid: typeof safeMeta.authUid === "string" ? safeMeta.authUid : "",
       coin: Number.isFinite(Number(safeMeta.coin)) ? Number(safeMeta.coin) : 0,
-      connected: true,
-      disconnectedAtMs: null,
-      disconnectedAtMsValue: 0,
+      avatarImage: typeof safeMeta.avatarImage === "string" ? safeMeta.avatarImage : "",
     });
     lastSyncedOwnCoin = Number.isFinite(Number(safeMeta.coin)) ? Number(safeMeta.coin) : 0;
 
@@ -476,25 +503,11 @@ export function createRoomManager(options) {
         unwatchRoom = null;
       }
       if (memberRef) {
+        await onDisconnect(memberRef).cancel().catch(function() {});
+        await remove(memberRef);
         const roomBaseRef = ref(db, roomPath + "/" + roomId);
-        const roomSnap = await get(roomBaseRef);
-        const roomData = roomSnap.val() || {};
-        const game = roomData && roomData.gameData && typeof roomData.gameData === "object" ? roomData.gameData : null;
-        const shouldKeepSeat = !!(game && (game.phase === "playing" || game.phase === "trading" || game.phase === "finished"));
-        if (shouldKeepSeat) {
-          await update(memberRef, {
-            connected: false,
-            disconnectedAtMs: serverTimestamp(),
-            disconnectedAtMsValue: nowMs(),
-            updatedAtMs: nowMs(),
-          });
-        } else {
-          await remove(memberRef);
-        }
         const afterMembersSnap = await get(ref(db, roomPath + "/" + roomId + "/members"));
-        const remainMembers = toMemberList(afterMembersSnap.val()).filter(function(member) {
-          return member.connected !== false;
-        });
+        const remainMembers = toMemberList(afterMembersSnap.val());
         if (!remainMembers.length) {
           await update(roomBaseRef, {
             updatedAt: serverTimestamp(),
@@ -536,3 +549,4 @@ export function createRoomManager(options) {
     runRoomTransaction
   };
 }
+

@@ -685,6 +685,13 @@ export function createMutatePlay(deps) {
     const members = mergeMembersWithCpu(roomData.members, roomData.settings);
     if (!game || (game.phase !== "playing" && game.phase !== "trading")) throw new Error("ゲーム中ではありません");
 
+    if (actionType === "transfer" && game.phase === "trading") {
+      actionType = "trade";
+    }
+    if (actionType === "trade" && game.phase === "playing" && game.pendingSevenPass) {
+      actionType = "transfer";
+    }
+
     if (actionType === "resolveTrade") {
       const tradeState = getTradeState(game);
       if (!tradeState) return { ok: false };
