@@ -215,12 +215,7 @@
       </div>
 
       <form class="form" id="homeForm" autocomplete="off">
-        <div class="field">
-          <label for="playerName">名前</label>
-          <input id="playerName" name="playerName" type="text" maxlength="16" placeholder="名前を入力" />
-        </div>
-
-        <div class="field">
+<div class="field">
           <label for="roomWord">合言葉</label>
           <input id="roomWord" name="roomWord" type="text" maxlength="24" placeholder="合言葉を入力" />
         </div>
@@ -233,21 +228,25 @@
     </main>
   </div>
 
-  <script>
+  <script type="module">
+    const ROOM_WORD_KEY = "ochinchiro_room_word";
+
     const form = document.getElementById("homeForm");
     const roomWordInput = document.getElementById("roomWord");
-    const playerNameInput = document.getElementById("playerName");
     const message = document.getElementById("message");
+    const submitButton = form.querySelector("button[type=\"submit\"]");
+    let bootingLobby = false;
 
     function showMessage(text) {
       message.textContent = text;
     }
 
-    form.addEventListener("submit", (event) => {
+    roomWordInput.value = localStorage.getItem(ROOM_WORD_KEY) || "";
+
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
 
       const roomWord = roomWordInput.value.trim();
-      const playerName = playerNameInput.value.trim();
 
       if (!roomWord) {
         showMessage("合言葉を入力してください。");
@@ -255,17 +254,33 @@
         return;
       }
 
-      if (!playerName) {
-        showMessage("名前を入力してください。");
-        playerNameInput.focus();
+      localStorage.setItem(ROOM_WORD_KEY, roomWord);
+
+      if (bootingLobby) {
         return;
       }
 
-      localStorage.setItem("ochinchiro_room_word", roomWord);
-      localStorage.setItem("ochinchiro_player_name", playerName);
+      bootingLobby = true;
+      showMessage("ロビーを開いています。");
+      if (submitButton) submitButton.disabled = true;
 
-      showMessage("入力を保存しました。次の画面につなげられます。");
+      try {
+        const [{ db }, lobbyModule] = await Promise.all([
+          import("./shared/firebase.js"),
+          import("./lobby.js"),
+        ]);
+
+        const state = lobbyModule.createLobbyState(db);
+        lobbyModule.mountLobbyScreen(state);
+        lobbyModule.initializeLobbyScreen(state);
+      } catch (error) {
+        console.error(error);
+        bootingLobby = false;
+        if (submitButton) submitButton.disabled = false;
+        showMessage("ロビー表示に失敗しました。");
+      }
     });
   </script>
 </body>
 </html>
+

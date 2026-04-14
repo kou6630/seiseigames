@@ -1,11 +1,11 @@
 const FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: "AIzaSyDpjdhoWn-corTpUMhS4q0bWei5ho8ja-Q",
+  authDomain: "ochinchiro.firebaseapp.com",
+  databaseURL: "https://ochinchiro-default-rtdb.firebaseio.com",
+  projectId: "ochinchiro",
+  storageBucket: "ochinchiro.firebasestorage.app",
+  messagingSenderId: "114346085898",
+  appId: "1:114346085898:web:c43f2def62b858803399f3",
 };
 
 const ROOM_WORD_KEY = "ochinchiro_room_word";
