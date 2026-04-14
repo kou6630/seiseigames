@@ -309,6 +309,7 @@
       align-items: center;
       gap: 12px;
       min-width: 0;
+      flex-wrap: wrap;
     }
 
     .game-select-login-avatar {
@@ -343,6 +344,7 @@
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
+      margin-left: auto;
     }
 
     .game-select-nav-item {
@@ -377,6 +379,8 @@
       line-height: 1;
       flex-shrink: 0;
       display: none;
+      margin-left: 8px;
+      margin-right: 6px;
     }
 
     .game-select-screen.show #gameSelectSettingsBtn {
@@ -594,6 +598,12 @@
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
+    }
+
+    .admin-divider {
+      height: 1px;
+      margin: 4px 0 2px;
+      background: rgba(255, 255, 255, 0.08);
     }
 
     .admin-status {
@@ -826,17 +836,33 @@
       padding: 24px;
       background: rgba(2, 6, 23, 0.88);
       backdrop-filter: blur(10px);
+      overflow: hidden;
     }
 
     .daily-login-bonus-overlay.show {
       display: flex;
     }
 
+    .daily-login-bonus-stage {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .daily-login-bonus-scale {
+      width: 1184px;
+      transform-origin: center center;
+      transform: scale(min(1, calc((100vw - 48px) / 1184), calc((100vh - 48px) / 900)));
+    }
+
     .daily-login-bonus-wrap {
-      width: min(100%, 1240px);
-      max-height: calc(100vh - 48px);
-      overflow: auto;
-      padding: 28px;
+      width: 1184px;
+      max-height: none;
+      overflow: visible;
+      padding: 22px;
       border-radius: 28px;
       border: 1px solid rgba(255, 255, 255, 0.14);
       background: linear-gradient(160deg, rgba(15, 23, 42, 0.97), rgba(30, 41, 59, 0.97));
@@ -845,45 +871,46 @@
 
     .daily-login-bonus-title {
       text-align: center;
-      font-size: clamp(34px, 5vw, 56px);
+      font-size: 46px;
       font-weight: 900;
-      line-height: 1.1;
+      line-height: 1.08;
       color: #f8fafc;
     }
 
     .daily-login-bonus-rates {
-      margin-top: 14px;
+      margin-top: 10px;
       text-align: center;
-      font-size: 15px;
-      line-height: 1.9;
+      font-size: 14px;
+      line-height: 1.75;
       color: rgba(226, 232, 240, 0.95);
       white-space: pre-line;
     }
 
     .daily-login-bonus-guide {
-      margin-top: 16px;
+      margin-top: 12px;
       text-align: center;
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 800;
       color: #fde68a;
     }
 
     .daily-login-bonus-grid {
-      margin-top: 22px;
+      margin-top: 18px;
       display: grid;
       grid-template-columns: repeat(10, minmax(0, 1fr));
-      gap: 12px;
+      gap: 10px;
     }
 
     .daily-login-bonus-card {
-      min-height: 88px;
-      border-radius: 18px;
+      min-height: 72px;
+      border-radius: 16px;
       border: 1px solid rgba(255, 255, 255, 0.12);
       background: linear-gradient(135deg, rgba(125, 211, 252, 0.12), rgba(165, 180, 252, 0.12));
       color: var(--text);
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 900;
       letter-spacing: 0.04em;
+      padding: 0;
     }
 
     .daily-login-bonus-card:disabled {
@@ -966,6 +993,27 @@
     }
 
     @media (max-width: 1100px) {
+      .daily-login-bonus-scale {
+        width: 100%;
+        transform: none;
+      }
+
+      .daily-login-bonus-overlay {
+        padding: 14px;
+        overflow: auto;
+      }
+
+      .daily-login-bonus-stage {
+        display: block;
+        height: auto;
+      }
+
+      .daily-login-bonus-wrap {
+        width: 100%;
+        max-height: none;
+        overflow: visible;
+      }
+
       .daily-login-bonus-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
       }
@@ -1053,20 +1101,7 @@
 
   <section class="game-select-screen" id="gameSelectScreen">
     <div class="game-select-wrap">
-      <div class="game-select-topbar">
-        <div class="game-select-login">
-          <div class="game-select-login-avatar" id="gameSelectUserPhoto"></div>
-          <div class="game-select-login-meta">
-            <div id="gameSelectUserName" class="game-select-login-name">---</div>
-            <div id="gameSelectUserSub" class="game-select-login-sub">コイン: 0</div>
-          </div>
-        </div>
-        <div class="game-select-nav">
-          <button type="button" class="game-select-nav-item button-like" id="gameSelectSettingsBtn" aria-label="設定">⚙</button>
-          <button type="button" class="game-select-nav-item button-like admin-entry" id="adminEntryBtn">運営</button>
-          <button type="button" class="game-select-nav-item button-like" id="gameSelectHomeBtn">ホーム</button>
-        </div>
-      </div>
+      <div id="gameSelectTopbarMount"></div>
       <div class="game-select-header">
         <h2 class="game-select-title">ゲーム選択</h2>
       </div>
@@ -1083,10 +1118,7 @@
 
   <section class="admin-screen" id="adminScreen">
     <div class="admin-wrap">
-      <div class="admin-header">
-        <h2 class="admin-title">運営ページ</h2>
-        <button type="button" class="game-select-nav-item button-like" id="adminCloseBtn">閉じる</button>
-      </div>
+      <div id="adminTopbarMount"></div>
       <div class="admin-board">
         <div class="admin-tools">
           <div class="admin-panel">
@@ -1106,6 +1138,11 @@
               <div class="admin-actions">
                 <button type="button" class="primary" id="adminAddCoinBtn">コイン付与</button>
                 <button type="button" class="danger" id="adminRemoveCoinBtn">コイン没収</button>
+              </div>
+              <div class="admin-divider"></div>
+              <p class="admin-note">選んだ相手の所持アバターと欠片を初期状態に戻します。</p>
+              <div class="admin-actions">
+                <button type="button" class="danger" id="adminResetAvatarBtn">アバター所持リセット</button>
               </div>
               <div class="admin-status" id="adminStatus"></div>
             </div>
@@ -1136,64 +1173,68 @@
   </section>
 
   <section class="daily-login-bonus-overlay" id="dailyLoginBonusOverlay">
-    <div class="daily-login-bonus-wrap">
-      <div class="daily-login-bonus-title">ログインボーナス</div>
-      <div class="daily-login-bonus-rates" id="dailyLoginBonusRates">1等1枚 3000コイン
-2等4枚 1500コイン
-3等15枚 500コイン
-4等30枚 100コイン</div>
-      <div class="daily-login-bonus-guide">カードを1枚選んでください</div>
-      <div class="daily-login-bonus-grid" id="dailyLoginBonusGrid">
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
-        <button type="button" class="daily-login-bonus-card">?</button>
+    <div class="daily-login-bonus-stage">
+      <div class="daily-login-bonus-scale">
+        <div class="daily-login-bonus-wrap">
+          <div class="daily-login-bonus-title">ログインボーナス</div>
+          <div class="daily-login-bonus-rates" id="dailyLoginBonusRates">1等1枚 500コイン
+2等4枚 300コイン
+3等15枚 150コイン
+4等30枚 50コイン</div>
+          <div class="daily-login-bonus-guide">カードを1枚選んでください</div>
+          <div class="daily-login-bonus-grid" id="dailyLoginBonusGrid">
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+            <button type="button" class="daily-login-bonus-card">?</button>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -1201,7 +1242,7 @@
   <section class="daily-login-bonus-result" id="dailyLoginBonusResult">
     <div class="daily-login-bonus-result-box">
       <div class="daily-login-bonus-result-rank" id="dailyLoginBonusResultRank">1等</div>
-      <div class="daily-login-bonus-result-coin" id="dailyLoginBonusResultCoin">3000コイン</div>
+      <div class="daily-login-bonus-result-coin" id="dailyLoginBonusResultCoin">500コイン</div>
       <div class="daily-login-bonus-result-note">画面クリックで閉じる</div>
     </div>
   </section>
@@ -1209,3 +1250,6 @@
   <script type="module" src="./selectgame.js"></script>
 </body>
 </html>
+
+
+

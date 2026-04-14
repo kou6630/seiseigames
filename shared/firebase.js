@@ -6,6 +6,19 @@ import {
   signOut,
   onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-auth.js";
+import {
+  getDatabase,
+  ref,
+  child,
+  onValue,
+  off,
+  get,
+  set,
+  update,
+  remove,
+  onDisconnect,
+  runTransaction,
+} from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCesYWcJoOVxkrWAONVaGFDIncqzx6v3J4",
@@ -19,13 +32,14 @@ const firebaseConfig = {
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getDatabase(app);
 const googleProvider = new GoogleAuthProvider();
 
 googleProvider.setCustomParameters({
   prompt: "select_account",
 });
 
-export { app, auth, googleProvider };
+export { app, auth, db, googleProvider, ref, child, onValue, off, get, set, update, remove, onDisconnect, runTransaction };
 
 export async function signInWithGoogle() {
   const result = await signInWithPopup(auth, googleProvider);
@@ -53,3 +67,4 @@ export function requireLogin(onLoggedIn, onLoggedOut) {
     if (typeof onLoggedOut === "function") onLoggedOut();
   });
 }
+
