@@ -30,26 +30,30 @@ const DAILY_LOGIN_BONUS_CARDS = {
   "4等": { coin: 50, count: 30 },
 };
 const ADMIN_EMAILS = ["takoponnsama6630@gmail.com"];
-const AVATAR_IMAGE_MAP = {
-  avatar_1: "/img/アバター/1-虹靴.png",
-  avatar_2: "/img/アバター/2-古い野球玉.png",
-  avatar_3: "/img/アバター/3-焼きちくわ.png",
-  avatar_4: "/img/アバター/4-ブルーアップル.png",
-  avatar_5: "/img/アバター/5-チーズ.png",
-  avatar_6: "/img/アバター/6-カラースプレー.png",
-  avatar_41: "/img/アバター/41-ネズミ.png",
-  avatar_42: "/img/アバター/42-ピンクカエル.png",
-  avatar_43: "/img/アバター/43-タバコマン.png",
-  avatar_44: "/img/アバター/44-凶悪アヒル.png",
-  avatar_71: "/img/アバター/71-素ゴリ.png",
-  avatar_72: "/img/アバター/72-素りな.png",
-  avatar_73: "/img/アバター/73-素めそ.png",
-  avatar_91: "/img/アバター/91-カエルゴリ.png",
-  avatar_92: "/img/アバター/92-カエルりな.png",
-  avatar_93: "/img/アバター/93-カエルめそ.png"
-};
+const AVATAR_CATALOG = [
+  { id: "avatar_1", name: "1-虹靴", image: "/img/アバター/1-虹靴.png", rarity: "C" },
+  { id: "avatar_2", name: "2-古い野球玉", image: "/img/アバター/2-古い野球玉.png", rarity: "C" },
+  { id: "avatar_3", name: "3-焼きちくわ", image: "/img/アバター/3-焼きちくわ.png", rarity: "C" },
+  { id: "avatar_4", name: "4-ブルーアップル", image: "/img/アバター/4-ブルーアップル.png", rarity: "C" },
+  { id: "avatar_5", name: "5-チーズ", image: "/img/アバター/5-チーズ.png", rarity: "C" },
+  { id: "avatar_6", name: "6-カラースプレー", image: "/img/アバター/6-カラースプレー.png", rarity: "C" },
+  { id: "avatar_41", name: "41-ネズミ", image: "/img/アバター/41-ネズミ.png", rarity: "B" },
+  { id: "avatar_42", name: "42-ピンクカエル", image: "/img/アバター/42-ピンクカエル.png", rarity: "B" },
+  { id: "avatar_43", name: "43-タバコマン", image: "/img/アバター/43-タバコマン.png", rarity: "B" },
+  { id: "avatar_44", name: "44-凶悪アヒル", image: "/img/アバター/44-凶悪アヒル.png", rarity: "B" },
+  { id: "avatar_71", name: "71-素ゴリ", image: "/img/アバター/71-素ゴリ.png", rarity: "A" },
+  { id: "avatar_72", name: "72-素りな", image: "/img/アバター/72-素りな.png", rarity: "A" },
+  { id: "avatar_73", name: "73-素めそ", image: "/img/アバター/73-素めそ.png", rarity: "A" },
+  { id: "avatar_91", name: "91-カエルゴリ", image: "/img/アバター/91-カエルゴリ.png", rarity: "S" },
+  { id: "avatar_92", name: "92-カエルりな", image: "/img/アバター/92-カエルりな.png", rarity: "S" },
+  { id: "avatar_93", name: "93-カエルめそ", image: "/img/アバター/93-カエルめそ.png", rarity: "S" },
+];
+const AVATAR_IMAGE_MAP = AVATAR_CATALOG.reduce(function(map, avatar) {
+  map[avatar.id] = avatar.image;
+  return map;
+}, {});
 
-function normalizeAvatarId(value) {
+export function normalizeAvatarId(value) {
   const raw = String(value || "").trim();
   if (!raw) return DEFAULT_AVATAR;
   if (raw === DEFAULT_AVATAR) return DEFAULT_AVATAR;
@@ -79,13 +83,26 @@ function normalizeOwnedAvatars(values) {
   return normalized;
 }
 
-function getAvatarImageById(avatarId) {
+export function getAvatarCatalog() {
+  return AVATAR_CATALOG.map(function(avatar) {
+    return { ...avatar };
+  });
+}
+
+export function getAvatarImageMap() {
+  return { ...AVATAR_IMAGE_MAP };
+}
+
+export function getAvatarImageById(avatarId) {
   const normalizedId = normalizeAvatarId(avatarId);
   return AVATAR_IMAGE_MAP[normalizedId] || "";
 }
 
 function buildDefaultUserData(user) {
   return {
+    medalPusherState: {
+      boardCoinCount: 0,
+    },
     uid: user.uid,
     name: user.displayName || "",
     email: user.email || "",
@@ -108,6 +125,9 @@ function buildDefaultUserData(user) {
 
 function normalizeUserData(uid, data = {}) {
   const ownedAvatars = normalizeOwnedAvatars(data.ownedAvatars);
+  const rawMedalPusherState = data && typeof data.medalPusherState === "object" && data.medalPusherState
+    ? data.medalPusherState
+    : {};
 
   const requestedSelectedAvatar = normalizeAvatarId(data.selectedAvatar);
   const selectedAvatar = ownedAvatars.includes(requestedSelectedAvatar)
@@ -118,6 +138,9 @@ function normalizeUserData(uid, data = {}) {
     : (getAvatarImageById(selectedAvatar) || "");
 
   return {
+    medalPusherState: {
+      boardCoinCount: Math.max(0, Number(rawMedalPusherState.boardCoinCount || 0)),
+    },
     uid,
     name: data.name || "",
     email: data.email || "",
@@ -251,6 +274,12 @@ export async function updateUserData(partialData = {}, user = getCurrentUser()) 
   }
 
   delete safeData.isAdmin;
+
+  if (safeData.medalPusherState && typeof safeData.medalPusherState === "object") {
+    safeData.medalPusherState = {
+      boardCoinCount: Math.max(0, Number(safeData.medalPusherState.boardCoinCount || 0)),
+    };
+  }
 
   if (Array.isArray(safeData.ownedAvatars)) {
     safeData.ownedAvatars = normalizeOwnedAvatars(safeData.ownedAvatars);
@@ -859,8 +888,5 @@ export {
   FIRST_GAME_SELECT_LOGIN_BONUS,
   DAILY_LOGIN_BONUS_RESET_HOUR,
   DAILY_LOGIN_BONUS_CARDS,
+  AVATAR_CATALOG,
 };
-
-
-
-

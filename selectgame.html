@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeiSeigames - ゲーム選択</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --bg-1: #0f172a;
+      --bg-2: #1e293b;
+      --panel: rgba(15, 23, 42, 0.72);
+      --panel-border: rgba(255, 255, 255, 0.12);
+      --text: #f8fafc;
+      --sub: #cbd5e1;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 30%),
+        radial-gradient(circle at top right, rgba(129, 140, 248, 0.16), transparent 28%),
+        linear-gradient(160deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.98));
+      padding: 24px;
+    }
+
+    .game-select-wrap {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .topbar-mount {
+      margin-bottom: 18px;
+    }
+
+    .game-select-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .game-select-title {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 54px);
+      line-height: 1.05;
+      background: linear-gradient(90deg, #e0f2fe, #c4b5fd, #a5f3fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .game-select-board,
+    .admin-board,
+    .nickname-dialog,
+    .bonus-box,
+    .daily-bonus-wrap {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .game-select-board {
+      padding: 24px;
+    }
+
+    .game-select-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .game-select-item {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 150px;
+      padding: 18px;
+      border-radius: 24px;
+      text-decoration: none;
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(125, 211, 252, 0.1), rgba(165, 180, 252, 0.1));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      transition: transform 0.18s ease, border-color 0.18s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .game-select-item:hover {
+      transform: translateY(-3px);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .game-select-item::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.14), transparent 42%);
+      pointer-events: none;
+    }
+
+    .game-select-name {
+      position: relative;
+      z-index: 1;
+      margin: auto 0;
+      text-align: center;
+      font-size: clamp(22px, 2.2vw, 30px);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: 0.04em;
+      background: linear-gradient(90deg, #f8fafc, #c4b5fd, #a5f3fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .game-select-open {
+      position: relative;
+      z-index: 1;
+      align-self: flex-end;
+      color: var(--sub);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .admin-screen,
+    .nickname-modal,
+    .first-login-bonus-overlay,
+    .daily-login-bonus-overlay,
+    .daily-login-bonus-result {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(2, 6, 23, 0.82);
+      backdrop-filter: blur(8px);
+    }
+
+    .admin-screen.show,
+    .nickname-modal.show,
+    .first-login-bonus-overlay.show,
+    .daily-login-bonus-overlay.show,
+    .daily-login-bonus-result.show {
+      display: flex;
+    }
+
+    .admin-wrap {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .admin-board {
+      padding: 24px;
+    }
+
+    .admin-tools {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      gap: 18px;
+    }
+
+    .admin-panel {
+      border-radius: 22px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .admin-panel h3 {
+      margin: 0 0 12px;
+      font-size: 22px;
+    }
+
+    .admin-note,
+    .admin-empty,
+    .admin-status {
+      color: var(--sub);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .admin-search,
+    .admin-coin-input,
+    .nickname-input {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+    }
+
+    .admin-user-list {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 430px;
+      overflow: auto;
+    }
+
+    .admin-selected {
+      min-height: 52px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--sub);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .admin-actions,
+    .nickname-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      cursor: pointer;
+      border-radius: 16px;
+      padding: 14px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      transition: transform 0.18s ease, opacity 0.18s ease, background 0.18s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .primary {
+      color: #08111f;
+      background: linear-gradient(90deg, #7dd3fc, #a5b4fc);
+    }
+
+    .danger {
+      color: #fff;
+      background: rgba(239, 68, 68, 0.9);
+    }
+
+    .nickname-dialog {
+      width: 100%;
+      max-width: 460px;
+      padding: 24px;
+    }
+
+    .nickname-dialog h3 {
+      margin: 0 0 12px;
+      font-size: 24px;
+    }
+
+    .nickname-dialog p,
+    .nickname-error {
+      color: var(--sub);
+      line-height: 1.7;
+    }
+
+    .bonus-box,
+    .daily-bonus-wrap,
+    .daily-bonus-result-box {
+      width: min(100%, 760px);
+      padding: 36px 24px;
+      text-align: center;
+    }
+
+    .bonus-title,
+    .daily-bonus-title,
+    .daily-bonus-result-rank {
+      font-size: clamp(34px, 6vw, 60px);
+      font-weight: 900;
+      line-height: 1.1;
+      color: #f8fafc;
+    }
+
+    .bonus-amount,
+    .daily-bonus-result-coin {
+      margin-top: 16px;
+      font-size: clamp(30px, 5vw, 54px);
+      font-weight: 900;
+      line-height: 1.15;
+      background: linear-gradient(90deg, #7dd3fc, #a5b4fc, #67e8f9);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .bonus-note,
+    .daily-bonus-note,
+    .daily-bonus-rates,
+    .daily-bonus-guide {
+      margin-top: 18px;
+      color: rgba(203, 213, 225, 0.92);
+    }
+
+    .daily-bonus-grid {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .daily-bonus-card {
+      min-height: 72px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: linear-gradient(135deg, rgba(125, 211, 252, 0.12), rgba(165, 180, 252, 0.12));
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    @media (max-width: 860px) {
+      .game-select-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .admin-tools {
+        grid-template-columns: 1fr;
+      }
+
+      .daily-bonus-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      .game-select-list {
+        grid-template-columns: 1fr;
+      }
+
+      .daily-bonus-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="game-select-wrap">
+    <div id="gameSelectTopbarMount" class="topbar-mount"></div>
+
+    <div class="game-select-header">
+      <h1 class="game-select-title">ゲーム選択</h1>
+    </div>
+
+    <section class="game-select-board">
+      <div class="game-select-list">
+        <a class="game-select-item" href="./代々大富豪/index.html">
+          <div class="game-select-name">代々大富豪</div>
+          <div class="game-select-open">OPEN</div>
+        </a>
+        <a class="game-select-item" href="javascript:void(0)" aria-disabled="true" style="pointer-events:none; opacity:0.55; filter:grayscale(0.2) brightness(0.8);">
+          <div class="game-select-name">メダルプッシャー</div>
+          <div class="game-select-open">COMING SOON</div>
+        </a>
+        <a class="game-select-item" href="javascript:void(0)" aria-disabled="true" style="pointer-events:none; opacity:0.55; filter:grayscale(0.2) brightness(0.8);">
+          <div class="game-select-name">おチンチロ</div>
+          <div class="game-select-open">COMING SOON</div>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <section class="admin-screen" id="adminScreen">
+    <div class="admin-wrap">
+      <div id="adminTopbarMount" class="topbar-mount"></div>
+      <div class="admin-board">
+        <div class="admin-tools">
+          <div class="admin-panel">
+            <h3>ユーザー一覧</h3>
+            <p class="admin-note">ログインしたことがある人をここで確認する想定です。</p>
+            <input id="adminSearchInput" class="admin-search" type="text" placeholder="名前やメールで探す" />
+            <div class="admin-user-list" id="adminUserList">
+              <div class="admin-empty">まだ一覧は読み込まれていません。</div>
+            </div>
+          </div>
+
+          <div class="admin-panel">
+            <h3>コイン対応</h3>
+            <p class="admin-note">選んだ相手に対して付与や没収を行う想定です。</p>
+            <div class="admin-selected" id="adminSelectedUser">対象ユーザーを選んでください。</div>
+            <input id="adminCoinInput" class="admin-coin-input" type="number" inputmode="numeric" min="1" step="1" placeholder="コイン数を入力" />
+            <div class="admin-actions">
+              <button type="button" class="primary" id="adminAddCoinBtn">コイン付与</button>
+              <button type="button" class="danger" id="adminRemoveCoinBtn">コイン没収</button>
+            </div>
+            <p class="admin-note">選んだ相手の所持アバターと欠片を初期状態に戻します。</p>
+            <div class="admin-actions">
+              <button type="button" class="danger" id="adminResetAvatarBtn">アバター所持リセット</button>
+            </div>
+            <div class="admin-status" id="adminStatus"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="nickname-modal" id="nicknameModal">
+    <div class="nickname-dialog">
+      <h3>ニックネーム登録</h3>
+      <p>最初に表示する名前を登録してください。</p>
+      <input id="nicknameInput" class="nickname-input" type="text" maxlength="20" placeholder="ニックネームを入力" />
+      <div id="nicknameError" class="nickname-error"></div>
+      <div class="nickname-actions">
+        <button type="button" class="primary" id="nicknameSaveBtn">登録する</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="first-login-bonus-overlay" id="firstLoginBonusOverlay">
+    <div class="bonus-box">
+      <div class="bonus-title">初回ログインボーナス</div>
+      <div class="bonus-amount">+200コイン</div>
+      <div class="bonus-note">画面クリックで閉じる</div>
+    </div>
+  </section>
+
+  <section class="daily-login-bonus-overlay" id="dailyLoginBonusOverlay">
+    <div class="daily-bonus-wrap">
+      <div class="daily-bonus-title">ログインボーナス</div>
+      <div class="daily-bonus-rates">1等1枚 500コイン<br>2等4枚 300コイン<br>3等15枚 150コイン<br>4等30枚 50コイン</div>
+      <div class="daily-bonus-guide">カードを1枚選んでください</div>
+      <div class="daily-bonus-grid" id="dailyLoginBonusGrid">
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="daily-login-bonus-result" id="dailyLoginBonusResult">
+    <div class="daily-bonus-result-box">
+      <div class="daily-bonus-result-rank" id="dailyLoginBonusResultRank">1等</div>
+      <div class="daily-bonus-result-coin" id="dailyLoginBonusResultCoin">500コイン</div>
+      <div class="daily-bonus-note">画面クリックで閉じる</div>
+    </div>
+  </section>
+
+  <script type="module">
+    import { onUserChanged } from "./shared/firebase.js";
+    import {
+      getUserData,
+      updateUserData,
+      grantFirstGameSelectLoginBonus,
+      grantDailyLoginBonus,
+      addUserCoinByUid,
+      useUserCoinByUid,
+      resetUserAvatarByUid,
+      getAllUsersData,
+      getAvatarImageById,
+      normalizeAvatarId
+    } from "./shared/userDate.js";
+    import { createTopbar } from "./topbar.js";
+
+    const gameSelectTopbarMount = document.getElementById("gameSelectTopbarMount");
+    const adminTopbarMount = document.getElementById("adminTopbarMount");
+    const adminScreen = document.getElementById("adminScreen");
+    const adminSearchInput = document.getElementById("adminSearchInput");
+    const adminUserList = document.getElementById("adminUserList");
+    const adminSelectedUser = document.getElementById("adminSelectedUser");
+    const adminCoinInput = document.getElementById("adminCoinInput");
+    const adminAddCoinBtn = document.getElementById("adminAddCoinBtn");
+    const adminRemoveCoinBtn = document.getElementById("adminRemoveCoinBtn");
+    const adminResetAvatarBtn = document.getElementById("adminResetAvatarBtn");
+    const adminStatus = document.getElementById("adminStatus");
+    const nicknameModal = document.getElementById("nicknameModal");
+    const nicknameInput = document.getElementById("nicknameInput");
+    const nicknameError = document.getElementById("nicknameError");
+    const nicknameSaveBtn = document.getElementById("nicknameSaveBtn");
+    const firstLoginBonusOverlay = document.getElementById("firstLoginBonusOverlay");
+    const dailyLoginBonusOverlay = document.getElementById("dailyLoginBonusOverlay");
+    const dailyLoginBonusGrid = document.getElementById("dailyLoginBonusGrid");
+    const dailyLoginBonusResult = document.getElementById("dailyLoginBonusResult");
+    const dailyLoginBonusResultRank = document.getElementById("dailyLoginBonusResultRank");
+    const dailyLoginBonusResultCoin = document.getElementById("dailyLoginBonusResultCoin");
+
+    const ADMIN_EMAILS = ["takoponnsama6630@gmail.com"];
+    const RENAME_COST_COIN = 100;
+
+    let currentUser = null;
+    let currentProfile = null;
+    let isAdminUser = false;
+    let gameSelectTopbar = null;
+    let adminTopbar = null;
+    let adminUsers = [];
+    let adminSelectedUid = "";
+    let settingsOverlay = null;
+    let settingsNicknameInput = null;
+    let settingsMessage = null;
+
+    function sanitizeNickname(value) {
+      return String(value || "").trim().replace(/\s+/g, " ").slice(0, 20);
+    }
+
+    function isAdminAccount(user) {
+      return Boolean(user && ADMIN_EMAILS.includes(String(user.email || "").toLowerCase()));
+    }
+
+    function getProfileAvatarImage(profile) {
+      const selectedAvatar = normalizeAvatarId(profile && profile.selectedAvatar ? profile.selectedAvatar : "");
+      return String(getAvatarImageById(selectedAvatar) || "").replace(/^\//, "");
+    }
+
+    function setAdminStatus(text) {
+      if (adminStatus) adminStatus.textContent = String(text || "");
+    }
+
+    function openNicknameModal(defaultValue) {
+      if (!nicknameModal) return;
+      if (nicknameInput) nicknameInput.value = defaultValue || "";
+      if (nicknameError) nicknameError.textContent = "";
+      nicknameModal.classList.add("show");
+    }
+
+    function closeNicknameModal() {
+      if (!nicknameModal) return;
+      nicknameModal.classList.remove("show");
+      if (nicknameError) nicknameError.textContent = "";
+    }
+
+    function openAdminScreen() {
+      if (adminScreen) adminScreen.classList.add("show");
+    }
+
+    function closeAdminScreen() {
+      if (adminScreen) adminScreen.classList.remove("show");
+    }
+
+    function closeDailyLoginBonusOverlay() {
+      if (dailyLoginBonusOverlay) dailyLoginBonusOverlay.classList.remove("show");
+    }
+
+    function closeDailyLoginBonusResult() {
+      if (dailyLoginBonusResult) dailyLoginBonusResult.classList.remove("show");
+    }
+
+    function showDailyLoginBonusResult(rank, coin) {
+      if (!dailyLoginBonusResult) return;
+      if (dailyLoginBonusResultRank) dailyLoginBonusResultRank.textContent = String(rank || "");
+      if (dailyLoginBonusResultCoin) dailyLoginBonusResultCoin.textContent = String(Number(coin || 0)) + "コイン";
+      dailyLoginBonusResult.classList.add("show");
+    }
+
+    function applyTopbarProfiles() {
+      const nickname = sanitizeNickname(currentProfile && currentProfile.nickname) || "ニックネーム未設定";
+      const coin = Number((currentProfile && currentProfile.coin) || 0);
+      const fragment = Number((currentProfile && currentProfile.avatarFragment) || 0);
+      const avatarImage = getProfileAvatarImage(currentProfile);
+
+      if (gameSelectTopbar) {
+        gameSelectTopbar.setProfile({ nickname: nickname, subText: "ユーザー情報", photoURL: avatarImage });
+        gameSelectTopbar.setStatText("coin", "コイン: " + coin);
+        gameSelectTopbar.setStatText("fragment", "欠片: " + fragment);
+        gameSelectTopbar.setButtonVisible("admin", isAdminUser);
+      }
+
+      if (adminTopbar) {
+        adminTopbar.setProfile({ nickname: nickname, subText: "ユーザー情報", photoURL: avatarImage });
+        adminTopbar.setStatText("coin", "コイン: " + coin);
+      }
+    }
+
+    function ensureTopbars() {
+      if (!gameSelectTopbar && gameSelectTopbarMount) {
+        gameSelectTopbar = createTopbar({
+          profile: { nickname: "---", subText: "ユーザー情報", photoURL: "" },
+          stats: [
+            { id: "coin", text: "コイン: 0" },
+            { id: "fragment", text: "欠片: 0" }
+          ],
+          actions: [
+            { id: "settings", label: "⚙", gear: true, position: "left", ariaLabel: "設定", onClick: function() { openSettings(); } },
+            { id: "avatar", label: "アバター選択", onClick: function() { window.location.href = "./avatarselect.html"; } },
+            { id: "gacha", label: "アバターガチャ", onClick: function() { window.location.href = "./avatargacha.html"; } },
+            { id: "home", label: "ホーム", onClick: function() { window.location.href = "./home.html"; } },
+            { id: "admin", label: "管理", hidden: true, onClick: async function() { if (!isAdminUser) return; openAdminScreen(); await loadAdminUsers(); } }
+          ]
+        });
+        gameSelectTopbarMount.appendChild(gameSelectTopbar.element);
+      }
+
+      if (!adminTopbar && adminTopbarMount) {
+        adminTopbar = createTopbar({
+          profile: { nickname: "運営ページ", subText: "ユーザー情報", photoURL: "" },
+          stats: [{ id: "coin", text: "コイン: 0" }],
+          actions: [
+            { id: "back", label: "戻る", onClick: function() { closeAdminScreen(); } }
+          ]
+        });
+        adminTopbarMount.appendChild(adminTopbar.element);
+      }
+    }
+
+    function ensureSettings() {
+      if (settingsOverlay) return;
+
+      const overlay = document.createElement("div");
+      overlay.className = "nickname-modal";
+
+      const dialog = document.createElement("div");
+      dialog.className = "nickname-dialog";
+
+      const title = document.createElement("h3");
+      title.textContent = "設定";
+
+      const guide = document.createElement("p");
+      guide.textContent = "名前変更は2回目以降100コイン消費です。";
+
+      const input = document.createElement("input");
+      input.className = "nickname-input";
+      input.type = "text";
+      input.maxLength = 20;
+      input.placeholder = "ニックネームを入力";
+
+      const message = document.createElement("div");
+      message.className = "nickname-error";
+
+      const actions = document.createElement("div");
+      actions.className = "nickname-actions";
+
+      const closeButton = document.createElement("button");
+      closeButton.type = "button";
+      closeButton.textContent = "閉じる";
+
+      const saveButton = document.createElement("button");
+      saveButton.type = "button";
+      saveButton.className = "primary";
+      saveButton.textContent = "保存する";
+
+      closeButton.addEventListener("click", function() {
+        closeSettings();
+      });
+
+      saveButton.addEventListener("click", async function() {
+        if (!currentUser) return;
+        const nickname = sanitizeNickname(input.value);
+        const currentName = sanitizeNickname(currentProfile && currentProfile.nickname);
+        if (!nickname) {
+          message.textContent = "名前を入れてください";
+          return;
+        }
+        saveButton.disabled = true;
+        message.textContent = "";
+        try {
+          if (currentName && nickname !== currentName) {
+            const nextCoin = Number((currentProfile && currentProfile.coin) || 0) - RENAME_COST_COIN;
+            currentProfile = await updateUserData({ coin: nextCoin, nickname: nickname }, currentUser);
+          } else {
+            currentProfile = await updateUserData({ nickname: nickname }, currentUser);
+          }
+          applyTopbarProfiles();
+          message.textContent = "保存しました";
+        } catch (error) {
+          console.error(error);
+          message.textContent = error && error.message ? error.message : "保存に失敗しました";
+        } finally {
+          saveButton.disabled = false;
+        }
+      });
+
+      actions.append(closeButton, saveButton);
+      dialog.append(title, guide, input, message, actions);
+      overlay.appendChild(dialog);
+      overlay.addEventListener("click", function(event) {
+        if (event.target === overlay) closeSettings();
+      });
+      document.body.appendChild(overlay);
+
+      settingsOverlay = overlay;
+      settingsNicknameInput = input;
+      settingsMessage = message;
+    }
+
+    function openSettings() {
+      ensureSettings();
+      if (!settingsOverlay) return;
+      if (settingsNicknameInput) settingsNicknameInput.value = sanitizeNickname(currentProfile && currentProfile.nickname);
+      if (settingsMessage) settingsMessage.textContent = "";
+      settingsOverlay.classList.add("show");
+    }
+
+    function closeSettings() {
+      if (!settingsOverlay) return;
+      settingsOverlay.classList.remove("show");
+    }
+
+    async function loadProfile(user) {
+      currentProfile = await getUserData(user);
+      isAdminUser = Boolean(currentProfile && currentProfile.isAdmin) || isAdminAccount(user);
+      applyTopbarProfiles();
+      return currentProfile;
+    }
+
+    async function ensureNicknameBeforeOpen() {
+      if (!currentUser) return false;
+      await loadProfile(currentUser);
+      const nickname = sanitizeNickname(currentProfile && currentProfile.nickname);
+      if (nickname) return true;
+      openNicknameModal("");
+      return false;
+    }
+
+    async function openWithBonus() {
+      const first = await grantFirstGameSelectLoginBonus(currentUser);
+      if (first && first.userData) currentProfile = first.userData;
+      applyTopbarProfiles();
+      if (first && first.awarded && firstLoginBonusOverlay) firstLoginBonusOverlay.classList.add("show");
+
+      const daily = await grantDailyLoginBonus(currentUser);
+      if (daily && daily.userData) currentProfile = daily.userData;
+      applyTopbarProfiles();
+
+      if (daily && daily.available && dailyLoginBonusGrid) {
+        dailyLoginBonusGrid.querySelectorAll(".daily-bonus-card").forEach(function(button, index) {
+          button.disabled = false;
+          button.textContent = "?";
+          button.onclick = async function() {
+            dailyLoginBonusGrid.querySelectorAll(".daily-bonus-card").forEach(function(item) {
+              item.disabled = true;
+            });
+            try {
+              const confirmed = await grantDailyLoginBonus(currentUser, { index: index });
+              if (confirmed && confirmed.userData) currentProfile = confirmed.userData;
+              applyTopbarProfiles();
+              closeDailyLoginBonusOverlay();
+              showDailyLoginBonusResult(confirmed && confirmed.rank ? confirmed.rank : "", confirmed && confirmed.amount ? confirmed.amount : 0);
+            } catch (error) {
+              console.error(error);
+            }
+          };
+        });
+        dailyLoginBonusOverlay.classList.add("show");
+      }
+    }
+
+    function renderAdminUsers(keyword) {
+      if (!adminUserList) return;
+      const search = String(keyword || "").trim().toLowerCase();
+      const filtered = adminUsers.filter(function(user) {
+        if (!search) return true;
+        const text = String(user.nickname || "") + " " + String(user.name || "") + " " + String(user.email || "");
+        return text.toLowerCase().includes(search);
+      });
+
+      if (!filtered.length) {
+        adminUserList.innerHTML = '<div class="admin-empty">該当ユーザーがいません。</div>';
+        return;
+      }
+
+      adminUserList.innerHTML = filtered.map(function(user) {
+        const label = user.nickname || user.name || "名前なし";
+        const email = user.email || "-";
+        const coin = Number.isFinite(Number(user.coin)) ? Number(user.coin) : 0;
+        return '<button type="button" class="game-select-item" data-admin-user="' + user.uid + '"><div class="game-select-name">' + label + '</div><div class="game-select-open">コイン: ' + coin + '<br>' + email + '</div></button>';
+      }).join("");
+
+      adminUserList.querySelectorAll("[data-admin-user]").forEach(function(button) {
+        button.addEventListener("click", function() {
+          adminSelectedUid = button.getAttribute("data-admin-user") || "";
+          const target = adminUsers.find(function(user) {
+            return user.uid === adminSelectedUid;
+          });
+          if (!target || !adminSelectedUser) return;
+          adminSelectedUser.textContent = (target.nickname || target.name || "名前なし") + " / " + (target.email || "-") + " / コイン: " + Number(target.coin || 0);
+        });
+      });
+    }
+
+    async function loadAdminUsers() {
+      if (!isAdminUser) return;
+      setAdminStatus("読み込み中です。");
+      try {
+        adminUsers = await getAllUsersData(currentUser);
+        renderAdminUsers(adminSearchInput ? adminSearchInput.value : "");
+        setAdminStatus("");
+      } catch (error) {
+        console.error(error);
+        setAdminStatus("一覧取得に失敗しました");
+      }
+    }
+
+    async function applyAdminCoin(mode) {
+      if (!adminSelectedUid) {
+        setAdminStatus("対象ユーザーを選んでください。");
+        return;
+      }
+      const amount = Math.max(0, Math.floor(Number(adminCoinInput ? adminCoinInput.value : 0)));
+      if (!amount) {
+        setAdminStatus("コイン数を入力してください。");
+        return;
+      }
+      setAdminStatus("更新中です。");
+      try {
+        const updated = mode === "add" ? await addUserCoinByUid(adminSelectedUid, amount, currentUser) : await useUserCoinByUid(adminSelectedUid, amount, currentUser);
+        adminUsers = adminUsers.map(function(user) {
+          return user.uid === updated.uid ? updated : user;
+        });
+        renderAdminUsers(adminSearchInput ? adminSearchInput.value : "");
+        if (adminSelectedUser) {
+          adminSelectedUser.textContent = (updated.nickname || updated.name || "名前なし") + " / " + (updated.email || "-") + " / コイン: " + Number(updated.coin || 0);
+        }
+        setAdminStatus(mode === "add" ? "コインを付与しました。" : "コインを没収しました。");
+        if (currentUser && updated.uid === currentUser.uid) await loadProfile(currentUser);
+      } catch (error) {
+        console.error(error);
+        setAdminStatus(error && error.message ? error.message : "更新に失敗しました");
+      }
+    }
+
+    async function applyAdminAvatarReset() {
+      if (!adminSelectedUid) {
+        setAdminStatus("対象ユーザーを選んでください。");
+        return;
+      }
+      setAdminStatus("リセット中です。");
+      try {
+        const updated = await resetUserAvatarByUid(adminSelectedUid, currentUser);
+        adminUsers = adminUsers.map(function(user) {
+          return user.uid === updated.uid ? updated : user;
+        });
+        renderAdminUsers(adminSearchInput ? adminSearchInput.value : "");
+        if (adminSelectedUser) {
+          adminSelectedUser.textContent = (updated.nickname || updated.name || "名前なし") + " / " + (updated.email || "-") + " / コイン: " + Number(updated.coin || 0);
+        }
+        setAdminStatus("アバター所持をリセットしました。");
+        if (currentUser && updated.uid === currentUser.uid) await loadProfile(currentUser);
+      } catch (error) {
+        console.error(error);
+        setAdminStatus(error && error.message ? error.message : "リセットに失敗しました");
+      }
+    }
+
+    if (nicknameSaveBtn) {
+      nicknameSaveBtn.addEventListener("click", async function() {
+        if (!currentUser) return;
+        const nickname = sanitizeNickname(nicknameInput ? nicknameInput.value : "");
+        if (!nickname) {
+          if (nicknameError) nicknameError.textContent = "名前を入れてください";
+          return;
+        }
+        nicknameSaveBtn.disabled = true;
+        if (nicknameError) nicknameError.textContent = "";
+        try {
+          currentProfile = await updateUserData({ nickname: nickname }, currentUser);
+          applyTopbarProfiles();
+          closeNicknameModal();
+          await openWithBonus();
+        } catch (error) {
+          console.error(error);
+          if (nicknameError) nicknameError.textContent = error && error.message ? error.message : "保存に失敗しました";
+        } finally {
+          nicknameSaveBtn.disabled = false;
+        }
+      });
+    }
+
+    if (adminSearchInput) {
+      adminSearchInput.addEventListener("input", function() {
+        renderAdminUsers(adminSearchInput.value);
+      });
+    }
+
+    if (adminAddCoinBtn) {
+      adminAddCoinBtn.addEventListener("click", function() { applyAdminCoin("add"); });
+    }
+
+    if (adminRemoveCoinBtn) {
+      adminRemoveCoinBtn.addEventListener("click", function() { applyAdminCoin("remove"); });
+    }
+
+    if (adminResetAvatarBtn) {
+      adminResetAvatarBtn.addEventListener("click", function() { applyAdminAvatarReset(); });
+    }
+
+    if (firstLoginBonusOverlay) {
+      firstLoginBonusOverlay.addEventListener("click", function() {
+        firstLoginBonusOverlay.classList.remove("show");
+      });
+    }
+
+    if (dailyLoginBonusResult) {
+      dailyLoginBonusResult.addEventListener("click", function() {
+        closeDailyLoginBonusResult();
+      });
+    }
+
+    ensureTopbars();
+
+    onUserChanged(async function(user) {
+      if (!user) {
+        window.location.href = "./home.html";
+        return;
+      }
+      currentUser = user;
+      await loadProfile(user);
+      const ready = await ensureNicknameBeforeOpen();
+      if (ready) await openWithBonus();
+    });
+  </script>
+</body>
+</html>
+
+

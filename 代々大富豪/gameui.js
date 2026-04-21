@@ -2,6 +2,7 @@ export function createGameUiRuntime(deps) {
   const {
     refs,
     createUI,
+    createTopbar,
     buildRulesText,
     normalizeRoomSettings,
     mergeMembersWithCpu,
@@ -180,6 +181,8 @@ export function createGameUiRuntime(deps) {
   }
 
   let ui = null;
+  let entryTopbar = null;
+  let roomTopbar = null;
   let currentAuthUser = null;
   let currentMembers = [];
   let currentGame = null;
@@ -200,6 +203,25 @@ export function createGameUiRuntime(deps) {
   let externalStateGetter = typeof deps.getExternalState === "function" ? deps.getExternalState : null;
   let externalActions = deps.actions || {};
   let initialized = false;
+
+  function syncLegacyTopbarVisibility() {
+    [
+      loginInfoPhoto,
+      loginInfoName,
+      loginInfoSub,
+      roomLoginInfoPhoto,
+      roomLoginInfoName,
+      roomLoginInfoSub,
+      entrySettingsButton,
+      roomSettingsGearButton,
+      settingsButton,
+      leaveButton
+    ].forEach(function(node) {
+      if (!node) return;
+      node.classList.add("hidden");
+      node.style.display = "none";
+    });
+  }
 
   const audioState = {
     context: null,
@@ -707,6 +729,7 @@ export function createGameUiRuntime(deps) {
       return {
         nickname: typeof data.nickname === "string" ? normalize(data.nickname) : "",
         coin: Number.isFinite(Number(data.coin)) ? Number(data.coin) : 0,
+        avatarFragment: Number.isFinite(Number(data.avatarFragment)) ? Number(data.avatarFragment) : 0,
         avatarImage: normalize(getProfileAvatarImage(data))
       };
     } catch (error) {
@@ -714,6 +737,7 @@ export function createGameUiRuntime(deps) {
       return {
         nickname: "",
         coin: 0,
+        avatarFragment: 0,
         avatarImage: ""
       };
     }
@@ -963,12 +987,195 @@ export function createGameUiRuntime(deps) {
     if (nextIds.length > previousIds.length) playSeTone("join");
   }
 
+  function syncCommonTopbarMode() {
+    const inRoom = !!document.body.classList.contains("inRoom");
+    const inGameScreen = !!(currentGame && currentGame.phase && currentGame.phase !== "waiting");
+    const roomTopbarMount = document.getElementById("roomTopbarMount");
+    const roomButtons = document.querySelector(".roomButtons");
+    const settingsButtonWrap = settingsButton && settingsButton.closest("button") ? settingsButton.closest("button") : settingsButton;
+    const leaveButtonWrap = leaveButton && leaveButton.closest("button") ? leaveButton.closest("button") : leaveButton;
+
+    if (entryTopbar && entryTopbar.element) {
+      entryTopbar.element.style.display = inRoom ? "none" : "flex";
+    }
+    if (roomTopbarMount) {
+      roomTopbarMount.style.display = inRoom && !inGameScreen ? "block" : "none";
+    }
+    if (roomTopbar && roomTopbar.element) {
+      roomTopbar.element.style.display = inRoom && !inGameScreen ? "flex" : "none";
+    }
+
+    if (roomButtons) {
+      roomButtons.style.display = inRoom ? "none" : roomButtons.style.display;
+      roomButtons.classList.toggle("hidden", inRoom);
+    }
+    if (settingsButtonWrap) {
+      settingsButtonWrap.classList.add("hidden");
+      settingsButtonWrap.style.display = "none";
+    }
+    if (leaveButtonWrap) {
+      leaveButtonWrap.classList.add("hidden");
+      leaveButtonWrap.style.display = "none";
+    }
+  }
+
+  async function handleCommonBackAction() {
+    if (document.body.classList.contains("inRoom")) {
+      if (externalActions.onLeaveRoom) {
+        await externalActions.onLeaveRoom();
+      }
+      if (externalActions.onBackToHome) {
+        await externalActions.onBackToHome();
+      }
+      return;
+    }
+    if (externalActions.onBackToHome) {
+      await externalActions.onBackToHome();
+    }
+  }
+
+  async function ensureCommonTopbars() {
+    syncLegacyTopbarVisibility();
+    const entryMount = document.getElementById("entryTopbarMount");
+    const roomMount = document.getElementById("roomTopbarMount");
+
+    if (!entryTopbar && entryMount && typeof createTopbar === "function") {
+      entryTopbar = createTopbar({
+        profile: {
+          nickname: "---",
+          subText: "ユーザー情報",
+          photoURL: ""
+        },
+        stats: [
+          { id: "coin", text: "コイン: 0" },
+          { id: "fragment", text: "欠片: 0" }
+        ],
+        actions: [
+          {
+            id: "settings",
+            label: "⚙",
+            gear: true,
+            position: "left",
+            ariaLabel: "設定",
+            onClick: function() {
+              openAppSettings();
+            }
+          },
+          {
+            id: "avatar",
+            label: "アバター選択",
+            onClick: function() {
+              if (externalActions.onOpenAvatarSelect) externalActions.onOpenAvatarSelect();
+            }
+          },
+          {
+            id: "back",
+            label: "戻る",
+            onClick: async function() {
+              await handleCommonBackAction();
+            }
+          },
+          {
+            id: "admin",
+            label: "管理",
+            hidden: true,
+            onClick: function() {
+              if (externalActions.onOpenAdmin) externalActions.onOpenAdmin();
+            }
+          }
+        ]
+      });
+      entryMount.appendChild(entryTopbar.element);
+    }
+
+    if (!roomTopbar && roomMount && typeof createTopbar === "function") {
+      roomTopbar = createTopbar({
+        profile: {
+          nickname: "---",
+          subText: "ユーザー情報",
+          photoURL: ""
+        },
+        stats: [
+          { id: "coin", text: "コイン: 0" },
+          { id: "fragment", text: "欠片: 0" }
+        ],
+        actions: [
+          {
+            id: "settings",
+            label: "⚙",
+            gear: true,
+            position: "left",
+            ariaLabel: "設定",
+            onClick: function() {
+              openAppSettings();
+            }
+          },
+          {
+            id: "avatar",
+            label: "アバター選択",
+            onClick: function() {
+              if (externalActions.onOpenAvatarSelect) externalActions.onOpenAvatarSelect();
+            }
+          },
+          {
+            id: "back",
+            label: "戻る",
+            onClick: async function() {
+              await handleCommonBackAction();
+            }
+          },
+          {
+            id: "admin",
+            label: "管理",
+            hidden: true,
+            onClick: function() {
+              if (externalActions.onOpenAdmin) externalActions.onOpenAdmin();
+            }
+          }
+        ]
+      });
+      roomMount.appendChild(roomTopbar.element);
+    }
+  }
+
+  function syncCommonTopbars(profile) {
+    ensureCommonTopbars();
+    syncCommonTopbarMode();
+    const safeProfile = profile || {};
+    const nickname = safeProfile.nickname || "ニックネーム未設定";
+    const coin = Number.isFinite(Number(safeProfile.coin)) ? Number(safeProfile.coin) : 0;
+    const fragment = Number.isFinite(Number(safeProfile.avatarFragment)) ? Number(safeProfile.avatarFragment) : 0;
+    const avatarImage = normalize(safeProfile.avatarImage || "");
+    const adminVisible = !!safeProfile.isAdmin;
+
+    [entryTopbar, roomTopbar].forEach(function(topbar) {
+      if (!topbar) return;
+      topbar.setProfile({
+        nickname: nickname,
+        subText: "ユーザー情報",
+        photoURL: avatarImage
+      });
+      topbar.setStatText("coin", "コイン: " + coin);
+      topbar.setStatText("fragment", "欠片: " + fragment);
+      topbar.setStatVisible("coin", true);
+      topbar.setStatVisible("fragment", true);
+      topbar.setButtonVisible("admin", adminVisible);
+    });
+  }
+
   async function applyLoggedInNickname(user) {
     currentAuthUser = user || null;
     const profile = await getLiveProfile(user);
     const nickname = getNicknameFromUser(user, profile);
     const coin = Number(profile.coin || 0);
     const avatarImage = normalize(profile.avatarImage || "");
+    syncCommonTopbars({
+      nickname: nickname || "ニックネーム未設定",
+      coin: coin,
+      avatarFragment: Number(profile.avatarFragment || 0),
+      avatarImage: avatarImage,
+      isAdmin: !!(user && String(user.email || "").toLowerCase() === "takoponnsama6630@gmail.com")
+    });
     if (playerNameInput) {
       playerNameInput.value = nickname;
       playerNameInput.readOnly = true;
@@ -981,15 +1188,25 @@ export function createGameUiRuntime(deps) {
     if (loginInfoName) loginInfoName.textContent = displayName;
     if (loginInfoSub) loginInfoSub.textContent = displaySub;
     if (loginInfoPhoto) {
-      if (avatarImage) loginInfoPhoto.src = avatarImage;
-      else loginInfoPhoto.removeAttribute("src");
+      if (avatarImage) {
+        loginInfoPhoto.src = avatarImage;
+        loginInfoPhoto.style.visibility = "visible";
+      } else {
+        loginInfoPhoto.removeAttribute("src");
+        loginInfoPhoto.style.visibility = "hidden";
+      }
       loginInfoPhoto.style.display = "block";
     }
     if (roomLoginInfoName) roomLoginInfoName.textContent = displayName;
     if (roomLoginInfoSub) roomLoginInfoSub.textContent = displaySub;
     if (roomLoginInfoPhoto) {
-      if (avatarImage) roomLoginInfoPhoto.src = avatarImage;
-      else roomLoginInfoPhoto.removeAttribute("src");
+      if (avatarImage) {
+        roomLoginInfoPhoto.src = avatarImage;
+        roomLoginInfoPhoto.style.visibility = "visible";
+      } else {
+        roomLoginInfoPhoto.removeAttribute("src");
+        roomLoginInfoPhoto.style.visibility = "hidden";
+      }
       roomLoginInfoPhoto.style.display = "block";
     }
     if (settingsNicknameInput) settingsNicknameInput.value = nickname;
@@ -1260,6 +1477,7 @@ export function createGameUiRuntime(deps) {
     clearSelectionIfNeeded();
     maybePlayOwnTurnSe(currentGame);
     syncGameBgm(currentGame);
+    syncCommonTopbarMode();
     if (ui && typeof ui.renderGame === "function") ui.renderGame(currentGame);
     updateRulesTextWithBetStatus();
     renderReceivedCardEffects();
@@ -1274,11 +1492,19 @@ export function createGameUiRuntime(deps) {
       const displaySub = "コイン: " + coin;
       if (loginInfoSub) loginInfoSub.textContent = displaySub;
       if (roomLoginInfoSub) roomLoginInfoSub.textContent = displaySub;
+      if (entryTopbar) entryTopbar.setStatText("coin", displaySub);
+      if (roomTopbar) roomTopbar.setStatText("coin", displaySub);
     }
     renderMembersUI(list);
   }
 
   function setEntryMode() {
+    ensureCommonTopbars();
+    if (entryTopbar) entryTopbar.setButtonVisible("back", true);
+    if (roomTopbar) roomTopbar.setButtonVisible("back", true);
+    if (entryTopbar) entryTopbar.setButtonVisible("avatar", true);
+    if (roomTopbar) roomTopbar.setButtonVisible("avatar", true);
+    syncCommonTopbarMode();
     stopBgm();
     if (ui && typeof ui.setEntryMode === "function") ui.setEntryMode();
     else {
@@ -1289,6 +1515,15 @@ export function createGameUiRuntime(deps) {
   }
 
   function setRoomMode() {
+    ensureCommonTopbars();
+    const inGameScreen = !!(currentGame && currentGame.phase && currentGame.phase !== "waiting");
+    if (entryTopbar) entryTopbar.setButtonVisible("back", false);
+    if (roomTopbar) roomTopbar.setButtonVisible("back", !inGameScreen);
+    if (entryTopbar) entryTopbar.setButtonVisible("avatar", true);
+    if (roomTopbar) roomTopbar.setButtonVisible("avatar", !inGameScreen);
+    if (roomTopbar) roomTopbar.setButtonVisible("settings", !inGameScreen);
+    if (roomTopbar) roomTopbar.setButtonVisible("admin", !inGameScreen && !!(currentAuthUser && String(currentAuthUser.email || "").toLowerCase() === "takoponnsama6630@gmail.com"));
+    syncCommonTopbarMode();
     if (currentGame && currentGame.phase === "playing") syncGameBgm(currentGame);
     else playLoopBgm("playing");
     if (ui && typeof ui.setRoomMode === "function") ui.setRoomMode();
@@ -1430,6 +1665,23 @@ export function createGameUiRuntime(deps) {
           } catch (error) {
             console.error(error);
             showRoomMessage(error && error.message ? error.message : "キックに失敗しました");
+          }
+        },
+        onStartGame: async function() {
+          if (!externalActions.onStartGame) return;
+          if (externalActions.startGameBusy && externalActions.startGameBusy()) return;
+          if (externalActions.setStartGameBusy) externalActions.setStartGameBusy(true);
+          playUiSe("action");
+          clearRoomMessage();
+          try {
+            await showBetStartEffectForCurrentMembers();
+            await externalActions.onStartGame();
+          } catch (error) {
+            console.error(error);
+            showRoomMessage(error && error.message ? error.message : "ゲーム開始に失敗しました");
+          } finally {
+            if (externalActions.setStartGameBusy) externalActions.setStartGameBusy(false);
+            updateStartButton();
           }
         }
       }
@@ -1695,6 +1947,9 @@ export function createGameUiRuntime(deps) {
   function initialize() {
     if (initialized) return;
     initialized = true;
+    syncLegacyTopbarVisibility();
+    ensureCommonTopbars();
+    syncCommonTopbarMode();
     createUiInstance();
     bindStaticEvents();
     loadEntryFormFromLocal();
@@ -1823,4 +2078,8 @@ export function createGameUiRuntime(deps) {
     }
   };
 }
+
+
+
+
 

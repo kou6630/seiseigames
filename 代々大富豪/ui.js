@@ -56,7 +56,9 @@ export function createUI(deps) {
     onPass,
     onTransfer,
     onSeatOwnerTransfer,
-    onSeatKick
+    onSeatKick,
+    onStartGame,
+    onEndGameSession
   } = actions;
 
   let fieldOwnerLabel = document.getElementById("fieldOwnerLabel");
@@ -848,13 +850,13 @@ export function createUI(deps) {
     }
 
     if (!game) {
-      if (fieldOwnerLabel) if (fieldOwnerLabel) fieldOwnerLabel.textContent = "";
-      effectStatusLabel.textContent = "待機中";
-      lockStatusLabel.textContent = "縛りなし";
+      if (fieldOwnerLabel) fieldOwnerLabel.textContent = "";
+      if (effectStatusLabel) effectStatusLabel.textContent = "待機中";
+      if (lockStatusLabel) lockStatusLabel.textContent = "縛りなし";
       const lockBadgeWrap = document.getElementById("lockBadgeWrap");
       if (lockBadgeWrap) lockBadgeWrap.innerHTML = buildLockBadgeHtml(null);
       if (actionHintLabel) actionHintLabel.textContent = "開始待ち";
-      actionHintMirror.textContent = "開始待ち";
+      if (actionHintMirror) actionHintMirror.textContent = "開始待ち";
       actionLogCache = [];
       lastRenderedActionText = "";
       if (lastPlayList) lastPlayList.innerHTML = "";
@@ -863,9 +865,9 @@ export function createUI(deps) {
       return;
     }
 
-    effectStatusLabel.textContent = buildEffectStatusText(game);
+    if (effectStatusLabel) effectStatusLabel.textContent = buildEffectStatusText(game);
     maybePlayDirectionEffect(game);
-    lockStatusLabel.textContent = buildLockStatusText(game);
+    if (lockStatusLabel) lockStatusLabel.textContent = buildLockStatusText(game);
     const lockBadgeWrap = document.getElementById("lockBadgeWrap");
     if (lockBadgeWrap) lockBadgeWrap.innerHTML = buildLockBadgeHtml(game);
 
@@ -888,7 +890,7 @@ export function createUI(deps) {
     const tradeResultNotice = getTradeResultNotice(game);
     if (tradeResultNotice) {
       actionHintLabel.textContent = tradeResultNotice;
-      actionHintMirror.textContent = tradeResultNotice;
+      if (actionHintMirror) actionHintMirror.textContent = tradeResultNotice;
       if (tradeResultNotice !== lastRenderedActionText) {
         pushActionLog(tradeResultNotice);
         lastRenderedActionText = tradeResultNotice;
@@ -903,7 +905,7 @@ export function createUI(deps) {
       } else {
         actionHintLabel.textContent = tradeResultNotice || game.lastActionText || "交換中";
       }
-      actionHintMirror.textContent = actionHintLabel.textContent;
+      if (actionHintMirror) actionHintMirror.textContent = actionHintLabel ? actionHintLabel.textContent : "";
       if (actionHintLabel.textContent && actionHintLabel.textContent !== lastRenderedActionText) {
         pushActionLog(actionHintLabel.textContent);
         lastRenderedActionText = actionHintLabel.textContent;
@@ -916,13 +918,13 @@ export function createUI(deps) {
 
     if (game.phase === "finished") {
       actionHintLabel.textContent = tradeResultNotice || game.lastActionText || "順位が確定しました";
-      actionHintMirror.textContent = actionHintLabel.textContent;
+      if (actionHintMirror) actionHintMirror.textContent = actionHintLabel ? actionHintLabel.textContent : "";
     } else if (tradeResultNotice) {
       actionHintLabel.textContent = tradeResultNotice;
-      actionHintMirror.textContent = actionHintLabel.textContent;
+      if (actionHintMirror) actionHintMirror.textContent = actionHintLabel ? actionHintLabel.textContent : "";
     } else if (game.pendingSevenPass) {
       actionHintLabel.textContent = getMemberName(game.pendingSevenPass.fromPlayerId) + " が " + getMemberName(game.pendingSevenPass.toPlayerId) + " に " + game.pendingSevenPass.count + "枚渡します";
-      actionHintMirror.textContent = actionHintLabel.textContent;
+      if (actionHintMirror) actionHintMirror.textContent = actionHintLabel ? actionHintLabel.textContent : "";
       animateSeatToSeatCards(
         game.pendingSevenPass.fromPlayerId,
         game.pendingSevenPass.toPlayerId,
@@ -936,10 +938,10 @@ export function createUI(deps) {
       );
     } else if (game.pendingClearField) {
       actionHintLabel.textContent = game.lastActionText || "8切り処理中";
-      actionHintMirror.textContent = actionHintLabel.textContent;
+      if (actionHintMirror) actionHintMirror.textContent = actionHintLabel ? actionHintLabel.textContent : "";
     } else {
       actionHintLabel.textContent = game.lastActionText || "進行中";
-      actionHintMirror.textContent = actionHintLabel.textContent;
+      if (actionHintMirror) actionHintMirror.textContent = actionHintLabel ? actionHintLabel.textContent : "";
     }
 
     if (actionHintLabel.textContent && actionHintLabel.textContent !== lastRenderedActionText) {
@@ -1060,7 +1062,7 @@ export function createUI(deps) {
   function renderMyHand(cards) {
     const state = getState();
     const hand = sortHandCards(cards);
-    myHandCount.textContent = hand.length + "枚";
+    if (myHandCount) myHandCount.textContent = hand.length + "枚";
 
     const handIds = new Set(hand.map(function(card) { return card.id; }));
     Array.from(state.selectedCardIds).forEach(function(id) {
@@ -1097,17 +1099,50 @@ export function createUI(deps) {
     roomPanel.classList.toggle("guestLocked", !inGame && !finished && !isHostPlayer());
   }
 
+  function handleStartGameButtonClick() {
+    const state = getState();
+    const amHost = isHostPlayer();
+    const inGame = !!(state.currentGame && (state.currentGame.phase === "playing" || state.currentGame.phase === "trading"));
+    if (!amHost || inGame) return;
+    if (typeof onStartGame === "function") onStartGame();
+  }
+
+  function closeSettingsPanel() {
+    if (!settingsPanel) return;
+    settingsPanel.classList.add("hidden");
+    updateSettingsViewMode();
+  }
+
+  function handleSettingsButtonClick() {
+    const state = getState();
+    const amHost = isHostPlayer();
+    const inGame = !!(state.currentGame && (state.currentGame.phase === "playing" || state.currentGame.phase === "trading"));
+    const finished = !!(state.currentGame && state.currentGame.phase === "finished");
+    if (!amHost) return;
+    if (finished) {
+      if (typeof onEndGameSession === "function") onEndGameSession();
+      return;
+    }
+    if (inGame || !settingsPanel) return;
+    settingsPanel.classList.toggle("hidden");
+    updateSettingsViewMode();
+  }
+
   function updateStartButton() {
     const state = getState();
     const amHost = isHostPlayer();
     const inGame = !!(state.currentGame && (state.currentGame.phase === "playing" || state.currentGame.phase === "trading"));
     const finished = !!(state.currentGame && state.currentGame.phase === "finished");
-    settingsButton.classList.toggle("hidden", !amHost || inGame);
-    startGameButton.classList.toggle("hidden", !amHost);
-    startGameButton.textContent = finished ? "次の試合" : "ゲーム開始";
-    settingsButton.textContent = finished ? "終了" : "ルール設定";
-    startGameButton.disabled = !amHost || inGame || state.currentMembers.length < 2;
-    if (!amHost || inGame || finished) settingsPanel.classList.add("hidden");
+    if (settingsButton) {
+      settingsButton.classList.toggle("hidden", !amHost || inGame);
+      settingsButton.textContent = finished ? "終了" : "ルール設定";
+    }
+    if (startGameButton) {
+      startGameButton.classList.toggle("hidden", !amHost);
+      startGameButton.textContent = finished ? "次の試合" : "ゲーム開始";
+      startGameButton.disabled = !amHost || inGame || state.currentMembers.length < 2;
+    }
+    if (settingsPanel && (!amHost || inGame || finished)) settingsPanel.classList.add("hidden");
     updatePreStartLock();
     if (!(state.currentGame && (state.currentGame.phase === "playing" || state.currentGame.phase === "trading"))) {
       updateSelectionPrompt(null);
@@ -1127,13 +1162,27 @@ export function createUI(deps) {
     const compactLineEl = document.querySelector(".compactLine");
     const topInfoBarEl = document.querySelector(".topInfoBar");
     const rulesTextEl = document.getElementById("rulesText");
+    const roomHeadEl = document.querySelector(".roomHead");
+    const roomButtonsEl = document.querySelector(".roomButtons");
 
     if (fieldPanelEl) fieldPanelEl.classList.toggle("hidden", showSettingsOnly);
     if (membersList) membersList.classList.toggle("hidden", showSettingsOnly);
     if (myHandSectionEl) myHandSectionEl.classList.toggle("hidden", showSettingsOnly);
-    if (compactLineEl) compactLineEl.classList.toggle("hidden", showSettingsOnly);
-    if (topInfoBarEl) topInfoBarEl.classList.toggle("hidden", showSettingsOnly);
-    if (rulesTextEl) rulesTextEl.classList.toggle("hidden", showSettingsOnly);
+    if (roomHeadEl) {
+      roomHeadEl.classList.remove("hidden");
+      roomHeadEl.style.justifyContent = "space-between";
+      roomHeadEl.style.alignItems = "center";
+    }
+    if (roomButtonsEl) {
+      roomButtonsEl.style.order = "";
+      roomButtonsEl.style.marginLeft = "auto";
+      roomButtonsEl.style.marginRight = "0";
+      roomButtonsEl.style.display = "none";
+      roomButtonsEl.classList.add("hidden");
+    }
+    if (compactLineEl) compactLineEl.classList.add("hidden");
+    if (topInfoBarEl) topInfoBarEl.classList.add("hidden");
+    if (rulesTextEl) rulesTextEl.classList.add("hidden");
   }
 
   function renderRoomSettings(settings) {
@@ -1169,13 +1218,13 @@ export function createUI(deps) {
   function renderMembers(members) {
     const state = getState();
     const list = members;
-    memberCount.textContent = list.length + "人";
-    roomWordLabel.textContent = state.roomWord || "-";
+    if (memberCount) memberCount.textContent = list.length + "人";
+    if (roomWordLabel) roomWordLabel.textContent = state.roomWord || "-";
 
     if (!list.length) {
       lastMembersLayoutKey = "";
       lastRenderedRoleStateKey = "";
-      membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="fieldCards" id="lastPlayList"></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
+      membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div><div class="sideInfoCard"><span>操作</span><div id="sideActionButtons" style="display:grid;gap:8px;margin-top:6px;"></div></div></div><div class="arenaCenter"><div class="tableCenter"><div class="fieldCards" id="lastPlayList"></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
       bindArenaElements();
       applyRoomScale();
       updateStartButton();
@@ -1214,8 +1263,9 @@ export function createUI(deps) {
     const startAngle = -Math.PI / 2;
 
     const leftHtml = '<div class="sideInfoCol">'
-      + '<div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">' + escapeHtml(state.roomWord || '-') + '</strong></div>'
-      + '<div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">' + list.length + '人</strong></div>'
+      + '<div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">' + escapeHtml((roomWordLabel && roomWordLabel.textContent) || '-') + '</strong></div>'
+      + '<div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">' + escapeHtml((memberCount && memberCount.textContent) || '0人') + '</strong></div>'
+      + '<div class="sideInfoCard"><span>操作</span><div id="sideActionButtons" style="display:grid;gap:8px;margin-top:6px;"></div></div>'
       + '</div>';
 
     const centerHtml = '<div class="arenaCenter">'
@@ -1227,10 +1277,9 @@ export function createUI(deps) {
       + '</div>';
 
     const rightHtml = '<div class="sideInfoCol">'
-      + '<div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">' + escapeHtml(gamePhaseLabel.textContent || '待機中') + '</strong></div>'
-      + '<div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">' + escapeHtml(turnInfoLabel.textContent || '-') + '</strong></div>'
-      + '<div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">' + escapeHtml(rulesText.textContent || '-') + '</strong></div>'
-      + '<div class="sideInfoCard"><span>ログ</span><div id="actionLogList" style="max-height:220px;overflow-y:auto;padding-right:6px;font-size:12px;line-height:1.45;">まだログはありません</div></div>'
+      + '<div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">' + escapeHtml((gamePhaseLabel && gamePhaseLabel.textContent) || '待機中') + '</strong></div>'
+      + '<div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">' + escapeHtml((turnInfoLabel && turnInfoLabel.textContent) || '-') + '</strong></div>'
+      + '<div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">' + escapeHtml((rulesText && rulesText.textContent) || '-') + '</strong></div>'
       + '</div>';
 
     const highlightedPlayerId = getHighlightedPlayerId(state.currentGame);
@@ -1286,6 +1335,7 @@ export function createUI(deps) {
 
     membersList.innerHTML = leftHtml + centerHtml + seatsHtml + '</div>' + rightHtml;
     bindArenaElements();
+    syncSideInfo();
     updateSeatLiveState();
     applyRoomScale();
     renderActionLog();
@@ -1294,16 +1344,72 @@ export function createUI(deps) {
   }
 
   function syncSideInfo() {
+    const state = getState();
     const sideRoomWordLabel = document.getElementById("sideRoomWordLabel");
     const sideMemberCountLabel = document.getElementById("sideMemberCountLabel");
     const sideGamePhaseLabel = document.getElementById("sideGamePhaseLabel");
     const sideTurnInfoLabel = document.getElementById("sideTurnInfoLabel");
     const sideRulesText = document.getElementById("sideRulesText");
-    if (sideRoomWordLabel) sideRoomWordLabel.textContent = roomWordLabel.textContent || "-";
-    if (sideMemberCountLabel) sideMemberCountLabel.textContent = memberCount.textContent || "0人";
-    if (sideGamePhaseLabel) sideGamePhaseLabel.textContent = gamePhaseLabel.textContent || "待機中";
-    if (sideTurnInfoLabel) sideTurnInfoLabel.textContent = turnInfoLabel.textContent || "-";
-    if (sideRulesText) sideRulesText.textContent = rulesText.textContent || "-";
+    const sideActionButtons = document.getElementById("sideActionButtons");
+    const amHost = isHostPlayer();
+    const inGame = !!(state.currentGame && (state.currentGame.phase === "playing" || state.currentGame.phase === "trading"));
+    const finished = !!(state.currentGame && state.currentGame.phase === "finished");
+
+    if (sideRoomWordLabel) sideRoomWordLabel.textContent = (roomWordLabel && roomWordLabel.textContent) || "-";
+    if (sideMemberCountLabel) sideMemberCountLabel.textContent = (memberCount && memberCount.textContent) || "0人";
+    if (sideGamePhaseLabel) sideGamePhaseLabel.textContent = (gamePhaseLabel && gamePhaseLabel.textContent) || "待機中";
+    if (sideTurnInfoLabel) sideTurnInfoLabel.textContent = (turnInfoLabel && turnInfoLabel.textContent) || "-";
+    if (sideRulesText) sideRulesText.textContent = (rulesText && rulesText.textContent) || "-";
+
+    if (!sideActionButtons) return;
+    sideActionButtons.innerHTML = "";
+
+    function appendSideButton(label, disabled, onClick) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.disabled = !!disabled;
+      button.style.width = "100%";
+      button.style.minWidth = "0";
+      button.style.height = "42px";
+      button.style.borderRadius = "12px";
+      button.addEventListener("click", onClick);
+      sideActionButtons.appendChild(button);
+    }
+
+    if (!inGame && !finished) {
+      if (amHost) {
+        appendSideButton("ゲーム開始", state.currentMembers.length < 2, function() {
+          handleStartGameButtonClick();
+        });
+        appendSideButton("ルール設定", false, function() {
+          handleSettingsButtonClick();
+        });
+      }
+      appendSideButton("退出", false, function() {
+        if (typeof onLeaveRoom === "function") onLeaveRoom();
+      });
+      return;
+    }
+
+    if (finished) {
+      if (amHost) {
+        appendSideButton("次の試合へ", state.currentMembers.length < 2, function() {
+          handleStartGameButtonClick();
+        });
+        appendSideButton("終了", false, function() {
+          if (typeof onEndGameSession === "function") onEndGameSession();
+        });
+      }
+      return;
+    }
+  }
+
+  function syncGameScreenChrome() {
+    const roomTopbarMount = document.getElementById("roomTopbarMount");
+    if (roomTopbarMount) {
+      roomTopbarMount.style.display = "none";
+    }
   }
 
   function renderGame(game) {
@@ -1312,9 +1418,11 @@ export function createUI(deps) {
       ? game
       : { phase: "waiting", revolution: false, jackBackActive: false, direction: 1, hands: {}, currentTurnPlayerId: "" };
 
+    syncGameScreenChrome();
+
     if (state.currentGame.phase === "waiting") {
-      gamePhaseLabel.textContent = "待機中";
-      turnInfoLabel.textContent = "開始待ち";
+      if (gamePhaseLabel) gamePhaseLabel.textContent = "待機中";
+      if (turnInfoLabel) turnInfoLabel.textContent = "開始待ち";
       if (Array.isArray(state.currentMembers) && state.currentMembers.length) renderMembers(state.currentMembers);
       renderMyHand([]);
       renderField(null);
@@ -1325,8 +1433,8 @@ export function createUI(deps) {
     }
 
     if (state.currentGame.phase === "finished") {
-      gamePhaseLabel.textContent = "終了";
-      turnInfoLabel.textContent = "次ゲーム待ち";
+      if (gamePhaseLabel) gamePhaseLabel.textContent = "終了";
+      if (turnInfoLabel) turnInfoLabel.textContent = "次ゲーム待ち";
       if (Array.isArray(state.currentMembers) && state.currentMembers.length) renderMembers(state.currentMembers);
       renderField(state.currentGame);
       updateRulesTextWithBetStatus();
@@ -1337,9 +1445,9 @@ export function createUI(deps) {
     }
 
     if (state.currentGame.phase === "trading") {
-      gamePhaseLabel.textContent = "交換中";
+      if (gamePhaseLabel) gamePhaseLabel.textContent = "交換中";
       const pair = getTradePairForPlayer(state.currentGame, state.playerId);
-      turnInfoLabel.textContent = pair && !pair.done ? "あなたの交換" : "交換待ち";
+      if (turnInfoLabel) turnInfoLabel.textContent = pair && !pair.done ? "あなたの交換" : "交換待ち";
       if (Array.isArray(state.currentMembers) && state.currentMembers.length) renderMembers(state.currentMembers);
       renderField(state.currentGame);
       syncSideInfo();
@@ -1348,10 +1456,12 @@ export function createUI(deps) {
       return;
     }
 
-    gamePhaseLabel.textContent = "ゲーム中";
-    turnInfoLabel.textContent = state.currentGame.pendingClearField
-      ? (getMemberName(state.currentGame.pendingClearField.nextPlayerId) + " の番")
-      : (getMemberName(state.currentGame.currentTurnPlayerId) + (state.currentGame.pendingSevenPass ? " / 7渡し中" : " / 手番"));
+    if (gamePhaseLabel) gamePhaseLabel.textContent = "ゲーム中";
+    if (turnInfoLabel) {
+      turnInfoLabel.textContent = state.currentGame.pendingClearField
+        ? (getMemberName(state.currentGame.pendingClearField.nextPlayerId) + " の番")
+        : (getMemberName(state.currentGame.currentTurnPlayerId) + (state.currentGame.pendingSevenPass ? " / 7渡し中" : " / 手番"));
+    }
     if (Array.isArray(state.currentMembers) && state.currentMembers.length) renderMembers(state.currentMembers);
     renderField(state.currentGame);
     updateRulesTextWithBetStatus();
@@ -1361,6 +1471,7 @@ export function createUI(deps) {
   }
 
   function setEntryMode() {
+    syncGameScreenChrome();
     lastMembersLayoutKey = "";
     lastRenderedRoleStateKey = "";
     document.body.classList.remove("inRoom");
@@ -1368,54 +1479,102 @@ export function createUI(deps) {
     closeSeatActionMenu();
     roomPanel.classList.add("hidden");
     roomPanel.classList.remove("guestLocked");
-    memberCount.textContent = "0人";
-    roomWordLabel.textContent = "-";
-    gamePhaseLabel.textContent = "待機中";
-    turnInfoLabel.textContent = "-";
+    if (memberCount) memberCount.textContent = "0人";
+    if (roomWordLabel) roomWordLabel.textContent = "-";
+    if (gamePhaseLabel) gamePhaseLabel.textContent = "待機中";
+    if (turnInfoLabel) turnInfoLabel.textContent = "-";
     if (fieldOwnerLabel) fieldOwnerLabel.textContent = "";
-    effectStatusLabel.textContent = "待機中";
-    lockStatusLabel.textContent = "縛りなし";
+    if (effectStatusLabel) effectStatusLabel.textContent = "待機中";
+    if (lockStatusLabel) lockStatusLabel.textContent = "縛りなし";
     if (actionHintLabel) actionHintLabel.textContent = "開始待ち";
-    actionHintMirror.textContent = "開始待ち";
+    if (actionHintMirror) actionHintMirror.textContent = "開始待ち";
     lastAnimatedPlayKey = "";
     lastAnimatedTransferKey = "";
     lastDirectionEffectKey = "";
-    myHandCount.textContent = "0枚";
-    myHandList.innerHTML = '<div class="handEmpty">ゲーム開始で手札が配られます</div>';
+    if (myHandCount) myHandCount.textContent = "0枚";
+    if (myHandList) myHandList.innerHTML = '<div class="handEmpty">ゲーム開始で手札が配られます</div>';
     if (lastPlayList) lastPlayList.innerHTML = "";
-    membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div></div><div class="arenaCenter"><div class="tableCenter"><div class="fieldCards" id="lastPlayList"></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
+    if (membersList) {
+      membersList.innerHTML = '<div class="sideInfoCol"><div class="sideInfoCard"><span>合言葉</span><strong id="sideRoomWordLabel">-</strong></div><div class="sideInfoCard"><span>参加人数</span><strong id="sideMemberCountLabel">0人</strong></div><div class="sideInfoCard"><span>操作</span><div id="sideActionButtons" style="display:grid;gap:8px;margin-top:6px;"></div></div></div><div class="arenaCenter"><div class="tableCenter"><div class="fieldCards" id="lastPlayList"></div><div class="tableCenterSub" id="actionHintLabel">開始待ち</div></div><div class="fieldEmpty">まだ参加者はいません</div></div><div class="sideInfoCol"><div class="sideInfoCard"><span>状態</span><strong id="sideGamePhaseLabel">待機中</strong></div><div class="sideInfoCard"><span>手番</span><strong id="sideTurnInfoLabel">-</strong></div><div class="sideInfoCard"><span>ルール</span><strong id="sideRulesText">-</strong></div></div>';
+    }
     bindArenaElements();
-    settingsButton.classList.add("hidden");
-    settingsPanel.classList.add("hidden");
-    startGameButton.classList.add("hidden");
-    startGameButton.disabled = true;
-    playButton.disabled = true;
-    passButton.disabled = true;
-    transferButton.disabled = true;
+    const roomHeadEl = document.querySelector(".roomHead");
+    const roomButtonsEl = document.querySelector(".roomButtons");
+    const compactLineEl = document.querySelector(".compactLine");
+    const topInfoBarEl = document.querySelector(".topInfoBar");
+    const rulesTextEl = document.getElementById("rulesText");
+    if (roomHeadEl) {
+      roomHeadEl.classList.remove("hidden");
+      roomHeadEl.style.justifyContent = "space-between";
+      roomHeadEl.style.alignItems = "center";
+    }
+    if (roomButtonsEl) {
+      roomButtonsEl.style.order = "";
+      roomButtonsEl.style.marginLeft = "auto";
+      roomButtonsEl.style.marginRight = "0";
+      roomButtonsEl.style.display = "none";
+      roomButtonsEl.classList.add("hidden");
+    }
+    if (compactLineEl) compactLineEl.classList.add("hidden");
+    if (topInfoBarEl) topInfoBarEl.classList.add("hidden");
+    if (rulesTextEl) rulesTextEl.classList.add("hidden");
+    if (settingsButton) settingsButton.classList.add("hidden");
+    if (settingsPanel) settingsPanel.classList.add("hidden");
+    if (startGameButton) {
+      startGameButton.classList.add("hidden");
+      startGameButton.disabled = true;
+    }
+    if (playButton) playButton.disabled = true;
+    if (passButton) passButton.disabled = true;
+    if (transferButton) transferButton.disabled = true;
     updateSettingsViewMode();
   }
 
   function setRoomMode() {
+    const state = getState();
+    syncGameScreenChrome();
     closeSeatActionMenu();
     document.body.classList.add("inRoom");
     refs.entryPanel.classList.add("hidden");
     roomPanel.classList.remove("hidden");
+    const roomHeadEl = document.querySelector(".roomHead");
+    const roomButtonsEl = document.querySelector(".roomButtons");
+    const compactLineEl = document.querySelector(".compactLine");
+    const topInfoBarEl = document.querySelector(".topInfoBar");
+    const rulesTextEl = document.getElementById("rulesText");
+    if (roomHeadEl) {
+      roomHeadEl.classList.remove("hidden");
+      roomHeadEl.style.justifyContent = "space-between";
+      roomHeadEl.style.alignItems = "center";
+    }
+    if (roomButtonsEl) {
+      roomButtonsEl.style.order = "";
+      roomButtonsEl.style.marginLeft = "auto";
+      roomButtonsEl.style.marginRight = "0";
+      roomButtonsEl.style.display = "none";
+      roomButtonsEl.classList.add("hidden");
+    }
+    if (compactLineEl) compactLineEl.classList.add("hidden");
+    if (topInfoBarEl) topInfoBarEl.classList.add("hidden");
+    if (rulesTextEl) rulesTextEl.classList.add("hidden");
     applyRoomScale();
   }
 
-  membersList.addEventListener("click", function(event) {
-    if (isAppSettingsOpen()) {
-      closeSeatActionMenu();
-      return;
-    }
-    const target = event.target.closest("[data-seat-menu][data-player-id]");
-    if (!target) {
-      closeSeatActionMenu();
-      return;
-    }
-    event.stopPropagation();
-    openSeatActionMenu(target.getAttribute("data-player-id"), event.clientX, event.clientY);
-  });
+  if (membersList) {
+    membersList.addEventListener("click", function(event) {
+      if (isAppSettingsOpen()) {
+        closeSeatActionMenu();
+        return;
+      }
+      const target = event.target.closest("[data-seat-menu][data-player-id]");
+      if (!target) {
+        closeSeatActionMenu();
+        return;
+      }
+      event.stopPropagation();
+      openSeatActionMenu(target.getAttribute("data-player-id"), event.clientX, event.clientY);
+    });
+  }
 
   document.addEventListener("click", function(event) {
     if (!seatActionMenu) return;
@@ -1433,42 +1592,50 @@ export function createUI(deps) {
   window.addEventListener("resize", closeSeatActionMenu);
   window.addEventListener("scroll", closeSeatActionMenu, true);
 
-  myHandList.addEventListener("click", function(event) {
-    const target = event.target.closest("[data-card-id]");
-    if (!target) return;
-    onToggleCard(target.getAttribute("data-card-id"));
-  });
-
-  myHandList.addEventListener("mouseover", function(event) {
-    const target = event.target.closest("[data-card-id]");
-    if (!target || !myHandList.contains(target)) return;
-    applyHoverPreview(target.getAttribute("data-card-id"));
-  });
-
-  myHandList.addEventListener("mouseout", function(event) {
-    const target = event.target.closest("[data-card-id]");
-    if (!target) return;
-    const related = event.relatedTarget;
-    if (related && target.contains(related)) return;
-    if (related && myHandList.contains(related) && related.closest("[data-card-id]")) return;
-    clearHoverPreview();
-  });
-
-  playButton.addEventListener("click", onPlay);
-  passButton.addEventListener("click", onPass);
-  transferButton.addEventListener("click", onTransfer);
-  refs.leaveButton.addEventListener("click", onLeaveRoom);
-  Array.from(settingsPanel.querySelectorAll(".settingItem[data-setting-target]"))
-    .forEach(function(item) {
-      item.addEventListener("click", function(event) {
-        const target = event.target;
-        if (target && target.closest("input, button, label.switch, .choiceGroup, .choiceOption")) return;
-        const targetId = item.getAttribute("data-setting-target") || "";
-        const input = targetId ? document.getElementById(targetId) : null;
-        if (!input || input.disabled) return;
-        input.click();
-      });
+  if (myHandList) {
+    myHandList.addEventListener("click", function(event) {
+      const target = event.target.closest("[data-card-id]");
+      if (!target) return;
+      onToggleCard(target.getAttribute("data-card-id"));
     });
+
+    myHandList.addEventListener("mouseover", function(event) {
+      const target = event.target.closest("[data-card-id]");
+      if (!target || !myHandList.contains(target)) return;
+      applyHoverPreview(target.getAttribute("data-card-id"));
+    });
+
+    myHandList.addEventListener("mouseout", function(event) {
+      const target = event.target.closest("[data-card-id]");
+      if (!target) return;
+      const related = event.relatedTarget;
+      if (related && target.contains(related)) return;
+      if (related && myHandList.contains(related) && related.closest("[data-card-id]")) return;
+      clearHoverPreview();
+    });
+  }
+
+  if (playButton) playButton.addEventListener("click", onPlay);
+  if (passButton) passButton.addEventListener("click", onPass);
+  if (transferButton) transferButton.addEventListener("click", onTransfer);
+  if (refs.leaveButton) refs.leaveButton.addEventListener("click", onLeaveRoom);
+  if (startGameButton) startGameButton.addEventListener("click", handleStartGameButtonClick);
+  if (settingsButton) settingsButton.addEventListener("click", handleSettingsButtonClick);
+  const settingsBackButton = document.getElementById("settingsBackButton");
+  if (settingsBackButton) settingsBackButton.addEventListener("click", closeSettingsPanel);
+  if (settingsPanel) {
+    Array.from(settingsPanel.querySelectorAll(".settingItem[data-setting-target]"))
+      .forEach(function(item) {
+        item.addEventListener("click", function(event) {
+          const target = event.target;
+          if (target && target.closest("input, button, label.switch, .choiceGroup, .choiceOption")) return;
+          const targetId = item.getAttribute("data-setting-target") || "";
+          const input = targetId ? document.getElementById(targetId) : null;
+          if (!input || input.disabled) return;
+          input.click();
+        });
+      });
+  }
   window.addEventListener("resize", applyRoomScale);
 
   return {
@@ -1489,4 +1656,7 @@ export function createUI(deps) {
     updateStartButton
   };
 }
+
+
+
 

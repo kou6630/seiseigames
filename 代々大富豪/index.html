@@ -36,9 +36,9 @@
 
     body.inRoom {
       background:
-        radial-gradient(circle at top left, rgba(255, 255, 255, 0.06), transparent 24%),
-        radial-gradient(circle at bottom right, rgba(0, 0, 0, 0.22), transparent 28%),
-        linear-gradient(145deg, #0a3d28, #0d5b3b 54%, #072a1d);
+        radial-gradient(circle at top left, rgba(246, 196, 83, 0.22), transparent 28%),
+        radial-gradient(circle at top right, rgba(255, 227, 154, 0.12), transparent 22%),
+        linear-gradient(145deg, var(--bg1), var(--bg2) 52%, var(--bg3));
     }
 
     .screen {
@@ -54,8 +54,12 @@
     }
 
     body.inRoom .screen {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
       padding: 0;
       gap: 0;
+      align-items: stretch;
     }
 
     .panel {
@@ -81,20 +85,35 @@
 
     body.inRoom .roomPanel {
       width: 100vw;
+      height: 100vh;
       height: 100dvh;
       max-width: none;
       border-radius: 0;
       border: 0;
       box-shadow: none;
-      padding: 8px 10px;
+      padding: 12px 12px 10px;
       overflow: hidden;
+      background: rgba(8, 46, 31, 0.82);
+      backdrop-filter: none;
     }
 
     body.inRoom .roomHead {
-      justify-content: flex-end;
-      align-items: center;
+      display: none;
+    }
+
+    #roomTopbarMount {
+      display: none;
+      width: 100%;
+      min-width: 0;
+    }
+
+    #roomTopbarMount .seisei-topbar {
       margin-bottom: 0;
-      min-height: 40px;
+    }
+
+    body.inRoom #roomTopbarMount .seisei-topbar {
+      display: none;
+      margin-bottom: 0;
     }
 
     body.inRoom .topInfoBar,
@@ -111,100 +130,6 @@
       justify-content: flex-start;
       align-items: flex-start;
       gap: 10px;
-    }
-    .loginInfoActions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .gearButton {
-      width: 48px;
-      min-width: 48px;
-      height: 48px;
-      padding: 0;
-      border-radius: 16px;
-      color: var(--text);
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.14);
-      font-size: 22px;
-      line-height: 1;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-    .gearButton:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-    .loginInfoBar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.08);
-      margin-bottom: 12px;
-    }
-    .loginInfoPhoto {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 1px solid rgba(255,255,255,0.16);
-      background: rgba(255,255,255,0.08);
-      flex-shrink: 0;
-    }
-    .loginInfoText {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .loginInfoName {
-      font-size: 15px;
-      font-weight: 900;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .loginInfoSub {
-      font-size: 12px;
-      color: rgba(248,245,255,0.68);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    body.inRoom .entryTopBar {
-      display: none;
-    }
-    body.inRoom .loginInfoBar {
-      margin-bottom: 0;
-      padding: 6px 10px;
-      border-radius: 12px;
-      max-width: min(52vw, 420px);
-    }
-    body.inRoom .loginInfoActions {
-      margin-right: auto;
-    }
-    body.inRoom .gearButton {
-      width: 40px;
-      min-width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      font-size: 18px;
-    }
-    body.inRoom .loginInfoPhoto {
-      width: 34px;
-      height: 34px;
-    }
-    body.inRoom .loginInfoName {
-      font-size: 10px;
-    }
-    body.inRoom .loginInfoSub {
-      font-size: 10px;
     }
     .titleWrap { text-align: center; margin-bottom: 28px; }
     .crest {
@@ -288,12 +213,14 @@
       position: relative;
       min-height: 100%;
       min-width: 0;
+      width: 100%;
     }
 
     body.inRoom .membersList {
       min-height: 0;
-      height: calc(100dvh - 154px);
-      margin: 0;
+      height: auto;
+      margin: 0 0 8px;
+      flex: 1 1 auto;
     }
 
     body.inRoom .arenaCenter {
@@ -807,17 +734,9 @@
       margin-top: 6px;
     }
 
-    body.inRoom .roomButtons {
-      margin-left: auto;
-    }
+    
 
-    body.inRoom .leaveButton,
-    body.inRoom .settingsButton,
-    body.inRoom .actionButton {
-      height: 40px;
-      min-width: 84px;
-      border-radius: 12px;
-    }
+    
     .cardChip {
       min-width: 56px;
       height: 74px;
@@ -1093,18 +1012,7 @@
 </head>
 <body>
   <main class="screen">
-    <div class="entryTopBar">
-      <div class="loginInfoActions">
-        <div class="loginInfoBar" id="loginInfoBar">
-          <img class="loginInfoPhoto" id="loginInfoPhoto" alt="" />
-          <div class="loginInfoText">
-            <div class="loginInfoName" id="loginInfoName">---</div>
-            <div class="loginInfoSub" id="loginInfoSub">コイン: 0</div>
-          </div>
-        </div>
-        <button class="gearButton" id="entrySettingsButton" type="button" aria-label="設定">⚙</button>
-      </div>
-    </div>
+    <div class="entryTopBar" id="entryTopbarMount"></div>
     <section class="panel" id="entryPanel" aria-label="代々大富豪 入室画面">
       <div class="titleWrap">
         <div class="crest">♠</div>
@@ -1125,60 +1033,10 @@
 
     <section class="panel roomPanel hidden" id="roomPanel" aria-label="代々大富豪 部屋画面">
       <div class="roomHead">
-        <div class="loginInfoActions">
-          <div class="loginInfoBar" id="roomLoginInfoBar">
-            <img class="loginInfoPhoto" id="roomLoginInfoPhoto" alt="" />
-            <div class="loginInfoText">
-              <div class="loginInfoName" id="roomLoginInfoName">---</div>
-              <div class="loginInfoSub" id="roomLoginInfoSub">コイン: 0</div>
-            </div>
-          </div>
-          <button class="gearButton" id="roomSettingsGearButton" type="button" aria-label="設定">⚙</button>
-        </div>
-        <div class="roomButtons">
-          <button class="settingsButton hidden" id="settingsButton" type="button">ルール設定</button>
-          <button class="actionButton hidden" id="startGameButton" type="button">ゲーム開始</button>
-          <button class="leaveButton" id="leaveButton" type="button">退出</button>
-        </div>
+        <div id="roomTopbarMount"></div>
       </div>
 
-      <div class="topInfoBar">
-        <div class="miniInfoStack">
-          <div class="miniInfoCard"><span>合言葉</span><strong id="roomWordLabel">-</strong></div>
-          <div class="miniInfoCard"><span>参加人数</span><strong id="memberCount">0人</strong></div>
-        </div>
-      </div>
-
-      <div class="compactLine">
-        <div class="compactStatus">
-          <div class="compactPill">状態 <strong id="gamePhaseLabel">待機中</strong></div>
-          <div class="compactPill">手番 <strong id="turnInfoLabel">-</strong></div>
-        </div>
-      </div>
-
-      <div class="rulesText" id="rulesText">8切 / 革命 / 30秒</div>
       <div class="notice hidden" id="roomMessage"></div>
-
-      <section class="fieldPanel" aria-label="ゲーム場面">
-        <div class="fieldHead">
-          <div>
-            <div class="roomMini">STATUS</div>
-            <h3 class="fieldTitle">進行</h3>
-          </div>
-          <div class="countdownBadge" id="countdownLabel">-</div>
-        </div>
-        <div class="fieldMeta">
-          <div class="roomInfoCard">
-            <span>効果 / 縛り</span>
-            <strong id="effectStatusLabel">通常</strong>
-            <div class="fieldSub" id="lockStatusLabel">縛りなし</div>
-          </div>
-          <div class="roomInfoCard">
-            <span>待機中メッセージ</span>
-            <div class="fieldSub" id="actionHintMirror">開始待ち</div>
-          </div>
-        </div>
-      </section>
 
       <section class="settingsPanel hidden" id="settingsPanel" aria-label="ゲーム設定">
         <div class="settingsScreen">
@@ -1187,7 +1045,10 @@
             <div class="roomMini">GAME SETTINGS</div>
             <h3 class="settingsTitle">ゲーム設定</h3>
           </div>
-          <div class="settingsBadge">親だけ変更可</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+            <div class="settingsBadge">親だけ変更可</div>
+            <button class="secondaryButton" id="settingsBackButton" type="button">戻る</button>
+          </div>
         </div>
         <div class="settingsScreenBody">
           <div class="settingsColumn">
@@ -1353,4 +1214,7 @@
   <script type="module" src="./game.js"></script>
 </body>
 </html>
+
+
+
 

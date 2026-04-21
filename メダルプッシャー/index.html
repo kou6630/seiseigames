@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D ミニ・コインプッシャー</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        #info { position: absolute; top: 10px; width: 100%; text-align: center; color: #f4f1ff; font-family: sans-serif; text-shadow: 0 0 10px rgba(255, 255, 255, 0.45); pointer-events: none; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+</head>
+<body>
+    <div id="info">読み込み中</div>
+    <script type="module">
+        import { onUserChanged, getCurrentUser } from "../shared/firebase.js";
+        import { getUserData, updateUserData } from "../shared/userDate.js";
+
+        // --- 1. 3Dと物理演算の初期設定 ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
+        camera.position.set(0, 14, 21);
+        camera.lookAt(0, 2, 0);
+
+        const renderer = new THREE.WebGLRenderer({antialias: true});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const light = new THREE.DirectionalLight(0xffffff, 0.55);
+        light.position.set(5, 20, 10);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x777777));
+
+        const world = new CANNON.World();
+        world.gravity.set(0, -20, 0); // 重力を強めに設定してキビキビ動かす
+        world.broadphase = new CANNON.SAPBroadphase(world);
+        world.solver.iterations = 10;
+        world.allowSleep = true;
+
+        const objects = []; // 描画と物理演算を同期させるためのリスト
+        const coinPool = [];
+        const info = document.getElementById("info");
+        
+        let currentUser = null;
+        let boardCoinCount = 0;
+        let saveTimer = null;
+        let authChecked = false;
+        const STAGE_WIDTH = 20;
+        const STAGE_DEPTH = 12;
+        const STAGE_HEIGHT = 1;
+        const SIDE_WALL_HEIGHT = 2.2;
+        const SIDE_WALL_THICKNESS = 0.8;
+        const SIDE_WALL_DEPTH = 16.8;
+        const SIDE_SLOPE_WIDTH = 6;
+        const SIDE_SLOPE_THICKNESS = 0.35;
+        const SIDE_SLOPE_ANGLE = Math.PI / 5;
+        const BACK_WALL_HEIGHT = 3.2;
+        const BACK_WALL_THICKNESS = 0.8;
+        const BASKET_WIDTH = 5.2;
+        const BASKET_HEIGHT = 1.2;
+        const BASKET_DEPTH = 3.4;
+        const BASKET_WALL_THICKNESS = 0.3;
+        const BASKET_MOVE_LIMIT = 7.2;
+
+        let basketTargetX = 0;
+        let collectedCoinCount = 0;
+
+        // --- 2. ステージ（土台）を作る ---
+        const stageGeo = new THREE.BoxGeometry(STAGE_WIDTH, STAGE_HEIGHT, STAGE_DEPTH);
+        const stageMat = new THREE.MeshLambertMaterial({color: 0xffc6de});
+        const stageMesh = new THREE.Mesh(stageGeo, stageMat);
+        scene.add(stageMesh);
+
+        const stageBody = new CANNON.Body({
+            mass: 0, // 質量0＝動かない固定オブジェクト
+            shape: new CANNON.Box(new CANNON.Vec3(STAGE_WIDTH / 2, STAGE_HEIGHT / 2, STAGE_DEPTH / 2))
+        });
+        world.addBody(stageBody);
+
+        const sideWallGeo = new THREE.BoxGeometry(SIDE_WALL_THICKNESS, SIDE_WALL_HEIGHT, SIDE_WALL_DEPTH);
+        const sideWallMat = new THREE.MeshLambertMaterial({color: 0xb8b8b8});
+
+        const leftWallMesh = new THREE.Mesh(sideWallGeo, sideWallMat);
+        leftWallMesh.position.set(-(STAGE_WIDTH / 2) - (SIDE_WALL_THICKNESS / 2), (STAGE_HEIGHT / 2) + (SIDE_WALL_HEIGHT / 2), -2.4);
+        scene.add(leftWallMesh);
+
+        const rightWallMesh = new THREE.Mesh(sideWallGeo, sideWallMat);
+        rightWallMesh.position.set((STAGE_WIDTH / 2) + (SIDE_WALL_THICKNESS / 2), (STAGE_HEIGHT / 2) + (SIDE_WALL_HEIGHT / 2), -2.4);
+        scene.add(rightWallMesh);
+
+        const leftWallBody = new CANNON.Body({
+            mass: 0,
+            shape: new CANNON.Box(new CANNON.Vec3(SIDE_WALL_THICKNESS / 2, SIDE_WALL_HEIGHT / 2, SIDE_WALL_DEPTH / 2))
+        });
+        leftWallBody.position.copy(leftWallMesh.position);
+        world.addBody(leftWallBody);
+
+        const rightWallBody = new CANNON.Body({
+            mass: 0,
+            shape: new CANNON.Box(new CANNON.Vec3(SIDE_WALL_THICKNESS / 2, SIDE_WALL_HEIGHT / 2, SIDE_WALL_DEPTH / 2))
+        });
+        rightWallBody.position.copy(rightWallMesh.position);
+        world.addBody(rightWallBody);
+
+        const sideSlopeGeo = new THREE.BoxGeometry(SIDE_SLOPE_WIDTH, SIDE_SLOPE_THICKNESS, SIDE_WALL_DEPTH);
+        const sideSlopeMat = new THREE.MeshLambertMaterial({color: 0xb8b8b8});
+
+        const leftSlopeMesh = new THREE.Mesh(sideSlopeGeo, sideSlopeMat);
+        leftSlopeMesh.position.set(-(STAGE_WIDTH / 2) - 2.7, 4.6, -2.4);
+        leftSlopeMesh.rotation.z = -SIDE_SLOPE_ANGLE;
+        scene.add(leftSlopeMesh);
+
+        const rightSlopeMesh = new THREE.Mesh(sideSlopeGeo, sideSlopeMat);
+        rightSlopeMesh.position.set((STAGE_WIDTH / 2) + 2.7, 4.6, -2.4);
+        rightSlopeMesh.rotation.z = SIDE_SLOPE_ANGLE;
+        scene.add(rightSlopeMesh);
+
+        const leftSlopeBody = new CANNON.Body({
+            mass: 0,
+            shape: new CANNON.Box(new CANNON.Vec3(SIDE_SLOPE_WIDTH / 2, SIDE_SLOPE_THICKNESS / 2, SIDE_WALL_DEPTH / 2))
+        });
+        leftSlopeBody.position.copy(leftSlopeMesh.position);
+        leftSlopeBody.quaternion.setFromEuler(0, 0, -SIDE_SLOPE_ANGLE);
+        world.addBody(leftSlopeBody);
+
+        const rightSlopeBody = new CANNON.Body({
+            mass: 0,
+            shape: new CANNON.Box(new CANNON.Vec3(SIDE_SLOPE_WIDTH / 2, SIDE_SLOPE_THICKNESS / 2, SIDE_WALL_DEPTH / 2))
+        });
+        rightSlopeBody.position.copy(rightSlopeMesh.position);
+        rightSlopeBody.quaternion.setFromEuler(0, 0, SIDE_SLOPE_ANGLE);
+        world.addBody(rightSlopeBody);
+
+        const backWallGeo = new THREE.BoxGeometry(STAGE_WIDTH + (SIDE_WALL_THICKNESS * 2), BACK_WALL_HEIGHT, BACK_WALL_THICKNESS);
+        const backWallMat = new THREE.MeshLambertMaterial({color: 0xb8b8b8});
+        const backWallMesh = new THREE.Mesh(backWallGeo, backWallMat);
+        backWallMesh.position.set(0, (STAGE_HEIGHT / 2) + (BACK_WALL_HEIGHT / 2), -(STAGE_DEPTH / 2) - (BACK_WALL_THICKNESS / 2) - 4);
+        scene.add(backWallMesh);
+
+        const backWallBody = new CANNON.Body({
+            mass: 0,
+            shape: new CANNON.Box(new CANNON.Vec3((STAGE_WIDTH + (SIDE_WALL_THICKNESS * 2)) / 2, BACK_WALL_HEIGHT / 2, BACK_WALL_THICKNESS / 2))
+        });
+        backWallBody.position.copy(backWallMesh.position);
+        world.addBody(backWallBody);
+
+        // --- 3. プッシャー（押し出し機）を作る ---
+        const pusherGeo = new THREE.BoxGeometry(STAGE_WIDTH, 2, 16);
+        const pusherMat = new THREE.MeshLambertMaterial({color: 0xbfe8ff});
+        const pusherMesh = new THREE.Mesh(pusherGeo, pusherMat);
+        scene.add(pusherMesh);
+
+        const pusherBody = new CANNON.Body({
+            mass: 0,
+            type: CANNON.Body.KINEMATIC, // プログラムで強制的に動かすタイプ
+            shape: new CANNON.Box(new CANNON.Vec3(STAGE_WIDTH / 2, 1, 8))
+        });
+        pusherBody.position.set(0, 1.5, -10);
+        world.addBody(pusherBody);
+
+        const basketGroup = new THREE.Group();
+        scene.add(basketGroup);
+
+        const basketFloorMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(BASKET_WIDTH, 0.28, BASKET_DEPTH),
+            new THREE.MeshLambertMaterial({ color: 0x6ec1ff })
+        );
+        basketGroup.add(basketFloorMesh);
+
+        const basketLeftWallMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(BASKET_WALL_THICKNESS, BASKET_HEIGHT, BASKET_DEPTH),
+            new THREE.MeshLambertMaterial({ color: 0xa7e0ff })
+        );
+        basketLeftWallMesh.position.set(-(BASKET_WIDTH / 2) + (BASKET_WALL_THICKNESS / 2), BASKET_HEIGHT / 2, 0);
+        basketGroup.add(basketLeftWallMesh);
+
+        const basketRightWallMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(BASKET_WALL_THICKNESS, BASKET_HEIGHT, BASKET_DEPTH),
+            new THREE.MeshLambertMaterial({ color: 0xa7e0ff })
+        );
+        basketRightWallMesh.position.set((BASKET_WIDTH / 2) - (BASKET_WALL_THICKNESS / 2), BASKET_HEIGHT / 2, 0);
+        basketGroup.add(basketRightWallMesh);
+
+        const basketBackWallMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(BASKET_WIDTH, BASKET_HEIGHT, BASKET_WALL_THICKNESS),
+            new THREE.MeshLambertMaterial({ color: 0xa7e0ff })
+        );
+        basketBackWallMesh.position.set(0, BASKET_HEIGHT / 2, -(BASKET_DEPTH / 2) + (BASKET_WALL_THICKNESS / 2));
+        basketGroup.add(basketBackWallMesh);
+
+        basketGroup.position.set(0, -0.12, 8.2);
+
+        const basketFloorBody = new CANNON.Body({
+            mass: 0,
+            type: CANNON.Body.KINEMATIC,
+            shape: new CANNON.Box(new CANNON.Vec3(BASKET_WIDTH / 2, 0.14, BASKET_DEPTH / 2))
+        });
+        basketFloorBody.position.set(0, basketGroup.position.y, basketGroup.position.z);
+        world.addBody(basketFloorBody);
+
+        const basketLeftWallBody = new CANNON.Body({
+            mass: 0,
+            type: CANNON.Body.KINEMATIC,
+            shape: new CANNON.Box(new CANNON.Vec3(BASKET_WALL_THICKNESS / 2, BASKET_HEIGHT / 2, BASKET_DEPTH / 2))
+        });
+        basketLeftWallBody.position.set(
+            basketGroup.position.x + basketLeftWallMesh.position.x,
+            basketGroup.position.y + basketLeftWallMesh.position.y,
+            basketGroup.position.z + basketLeftWallMesh.position.z
+        );
+        world.addBody(basketLeftWallBody);
+
+        const basketRightWallBody = new CANNON.Body({
+            mass: 0,
+            type: CANNON.Body.KINEMATIC,
+            shape: new CANNON.Box(new CANNON.Vec3(BASKET_WALL_THICKNESS / 2, BASKET_HEIGHT / 2, BASKET_DEPTH / 2))
+        });
+        basketRightWallBody.position.set(
+            basketGroup.position.x + basketRightWallMesh.position.x,
+            basketGroup.position.y + basketRightWallMesh.position.y,
+            basketGroup.position.z + basketRightWallMesh.position.z
+        );
+        world.addBody(basketRightWallBody);
+
+        const basketBackWallBody = new CANNON.Body({
+            mass: 0,
+            type: CANNON.Body.KINEMATIC,
+            shape: new CANNON.Box(new CANNON.Vec3(BASKET_WIDTH / 2, BASKET_HEIGHT / 2, BASKET_WALL_THICKNESS / 2))
+        });
+        basketBackWallBody.position.set(
+            basketGroup.position.x + basketBackWallMesh.position.x,
+            basketGroup.position.y + basketBackWallMesh.position.y,
+            basketGroup.position.z + basketBackWallMesh.position.z
+        );
+        world.addBody(basketBackWallBody);
+
+        // --- 4. コインを作る仕組み ---
+        const coinGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 16);
+        const coinMat = new THREE.MeshLambertMaterial({color: 0xf2c94c});
+
+        function queueSave() {
+            if (!currentUser) return;
+            if (saveTimer) clearTimeout(saveTimer);
+            saveTimer = setTimeout(async () => {
+                try {
+                    await updateUserData({
+                        medalPusherState: {
+                            boardCoinCount: boardCoinCount,
+                        },
+                    }, currentUser);
+                } catch (error) {
+                    console.error(error);
+                }
+            }, 250);
+        }
+
+        function clearCoins() {
+            while (objects.length) {
+                recycleCoin(objects.length - 1, false);
+            }
+            boardCoinCount = 0;
+            collectedCoinCount = 0;
+        }
+
+        function updateInfoText() {
+            if (!currentUser) {
+                info.textContent = 'ログイン情報がありません';
+                return;
+            }
+            info.textContent = `ログイン中 / 台のコイン ${boardCoinCount}枚 / カゴ ${collectedCoinCount}枚`;
+        }
+
+        function recycleBodyToPool(body) {
+            if (!body) return;
+            body.velocity.setZero();
+            body.angularVelocity.setZero();
+            body.force.setZero();
+            body.torque.setZero();
+            body.position.set(0, -1000, 0);
+            body.quaternion.set(0, 0, 0, 1);
+            body.sleep();
+        }
+
+        function recycleCoin(index, countDown = true) {
+            const item = objects[index];
+            if (!item) return;
+            recycleBodyToPool(item.body);
+            item.mesh.visible = false;
+            objects.splice(index, 1);
+            coinPool.push(item);
+            if (countDown) {
+                boardCoinCount = Math.max(0, boardCoinCount - 1);
+            }
+        }
+
+        function recycleFallenCoins() {
+            for (let i = objects.length - 1; i >= 0; i -= 1) {
+                const item = objects[i];
+                if (!item || !item.body) continue;
+                const y = Number(item.body.position.y || 0);
+                const z = Number(item.body.position.z || 0);
+                if (y < -8 || z > 18) {
+                    recycleCoin(i, true);
+                }
+            }
+        }
+
+        function acquireCoin() {
+            const reused = coinPool.pop();
+            if (reused) {
+                reused.mesh.visible = true;
+                reused.body.wakeUp();
+                return reused;
+            }
+
+            const mesh = new THREE.Mesh(coinGeo, coinMat);
+            scene.add(mesh);
+
+            const body = new CANNON.Body({
+                mass: 1,
+                shape: new CANNON.Box(new CANNON.Vec3(0.7, 0.1, 0.7)),
+                allowSleep: true,
+                sleepSpeedLimit: 0.12,
+                sleepTimeLimit: 0.8,
+            });
+            world.addBody(body);
+            return { mesh: mesh, body: body, type: "coin" };
+        }
+
+        function updateBasketPosition(nextX) {
+            const safeX = Math.max(-BASKET_MOVE_LIMIT, Math.min(BASKET_MOVE_LIMIT, Number(nextX || 0)));
+            basketGroup.position.x = safeX;
+            basketFloorBody.position.x = safeX;
+            basketLeftWallBody.position.x = safeX + basketLeftWallMesh.position.x;
+            basketRightWallBody.position.x = safeX + basketRightWallMesh.position.x;
+            basketBackWallBody.position.x = safeX + basketBackWallMesh.position.x;
+        }
+
+        function collectBasketHits() {
+            for (let i = objects.length - 1; i >= 0; i -= 1) {
+                const item = objects[i];
+                if (!item || !item.body) continue;
+                const x = Number(item.body.position.x || 0);
+                const y = Number(item.body.position.y || 0);
+                const z = Number(item.body.position.z || 0);
+                const insideX = x >= basketGroup.position.x - (BASKET_WIDTH / 2) && x <= basketGroup.position.x + (BASKET_WIDTH / 2);
+                const insideY = y >= basketGroup.position.y - 0.2 && y <= basketGroup.position.y + BASKET_HEIGHT + 0.8;
+                const insideZ = z >= basketGroup.position.z - (BASKET_DEPTH / 2) && z <= basketGroup.position.z + (BASKET_DEPTH / 2);
+                if (!insideX || !insideY || !insideZ) continue;
+                recycleCoin(i, true);
+                collectedCoinCount += 1;
+                queueSave();
+                updateInfoText();
+            }
+        }
+
+        async function loadUserBoard() {
+            if (!currentUser) return;
+            clearCoins();
+            try {
+                const data = await getUserData(currentUser);
+                const savedCount = Math.max(0, Number(data && data.medalPusherState && data.medalPusherState.boardCoinCount || 0));
+                for (let i = 0; i < savedCount; i++) {
+                    dropCoin(false);
+                }
+                boardCoinCount = savedCount;
+                updateInfoText();
+            } catch (error) {
+                console.error(error);
+                info.textContent = "読み込みに失敗しました";
+            }
+        }
+
+        function dropCoin(shouldSave = true) {
+            const item = acquireCoin();
+            const randomX = (Math.random() - 0.5) * (STAGE_WIDTH - 4);
+
+            item.mesh.visible = true;
+            item.body.position.set(randomX, 8, -1);
+            item.body.quaternion.setFromEuler(Math.PI / 2, 0, 0);
+            item.body.velocity.setZero();
+            item.body.angularVelocity.setZero();
+            item.body.force.setZero();
+            item.body.torque.setZero();
+            item.body.wakeUp();
+
+            objects.push(item);
+            boardCoinCount += 1;
+            if (currentUser) {
+                updateInfoText();
+            }
+            if (shouldSave) {
+                queueSave();
+            }
+        }
+
+        // 画面クリックでコイン投下
+        window.addEventListener('click', () => {
+            if (!currentUser) {
+                updateInfoText();
+                return;
+            }
+            dropCoin(true);
+        });
+        window.addEventListener('touchstart', () => {
+            if (!currentUser) {
+                updateInfoText();
+                return;
+            }
+            dropCoin(true);
+        });
+
+        window.addEventListener('mousemove', (event) => {
+            const ratio = (event.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
+            basketTargetX = ratio * BASKET_MOVE_LIMIT;
+        });
+
+        setTimeout(async () => {
+            if (authChecked) return;
+            const fallbackUser = getCurrentUser();
+            if (fallbackUser) {
+                currentUser = fallbackUser;
+                authChecked = true;
+                await loadUserBoard();
+                return;
+            }
+            updateInfoText();
+        }, 1500);
+
+        onUserChanged(async (user) => {
+            authChecked = true;
+            currentUser = user || null;
+            if (currentUser) {
+                await loadUserBoard();
+                return;
+            }
+            clearCoins();
+            updateInfoText();
+        });
+
+        // 最初はコイン0枚スタート
+
+        // --- 5. アニメーション（毎フレームの処理） ---
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            world.step(1/60); // 物理演算を1コマ進める
+
+            // プッシャーを前後に動かす（サイン波を利用）
+            time += 0.005;
+            pusherBody.position.z = -11 + Math.sin(time) * 2;
+            pusherMesh.position.copy(pusherBody.position);
+
+            basketGroup.position.x += (basketTargetX - basketGroup.position.x) * 0.18;
+            updateBasketPosition(basketGroup.position.x);
+
+            // 物理演算の結果を、3Dの見た目に反映させる
+            for (let i = 0; i < objects.length; i++) {
+                objects[i].mesh.position.copy(objects[i].body.position);
+                objects[i].mesh.quaternion.copy(objects[i].body.quaternion);
+            }
+
+            collectBasketHits();
+            recycleFallenCoins();
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 画面サイズが変わった時の対応
+        window.addEventListener('beforeunload', () => {
+            queueSave();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
+
+

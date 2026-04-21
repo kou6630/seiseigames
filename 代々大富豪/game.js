@@ -1,4 +1,5 @@
 import { createUI } from "./ui.js";
+import { createTopbar } from "../topbar.js";
 import { createGameUiRuntime } from "./gameui.js";
 import { onUserChanged } from "../shared/firebase.js";
 import { getUserData, updateUserData, useUserCoin, transferUserCoinByUid, addUserCoinByUid, useUserCoinByUid } from "../shared/userDate.js";
@@ -115,6 +116,12 @@ const BET_REQUIRED_COIN = 20;
 const BET_BIG_AMOUNT = 20;
 const BET_SMALL_AMOUNT = 10;
 const CPU_ACTION_DELAY_MS = 1000;
+const UNIFIED_TOPBAR_BUTTON_IDS = {
+  settings: "settings",
+  avatar: "avatar",
+  back: "back",
+  admin: "admin"
+};
 
 const RULE_EFFECT_IMAGE_MAP = {
   "8切": "./img/skills/8kiri.png",
@@ -258,6 +265,7 @@ const gameUiRuntime = createGameUiRuntime({
     turnTime15
   },
   createUI,
+  createTopbar,
   buildRulesText,
   normalizeRoomSettings,
   mergeMembersWithCpu,
@@ -297,7 +305,11 @@ const gameUiRuntime = createGameUiRuntime({
     roomExpiredMessage: ROOM_EXPIRED_MESSAGE,
     ruleEffectImageMap: RULE_EFFECT_IMAGE_MAP,
     seAudioPaths: SE_AUDIO_PATHS,
-    bgmAudioPaths: BGM_AUDIO_PATHS
+    bgmAudioPaths: BGM_AUDIO_PATHS,
+    topbarMode: "same_as_selectgame",
+    unifiedTopbarButtonIds: UNIFIED_TOPBAR_BUTTON_IDS,
+    preferUnifiedTopbarOnly: true,
+    preferSelectgameTopbarLayout: true
   }
 });
 
@@ -682,7 +694,7 @@ gameUiRuntime.setExternalActions({
 
 onUserChanged(function(user) {
   currentAuthUser = user || null;
-  gameUiRuntime.applyLoggedInNickname(currentAuthUser);
+  Promise.resolve(gameUiRuntime.applyLoggedInNickname(currentAuthUser)).catch(console.error);
   if (!user && !roomWord) {
     gameUiRuntime.showEntryMessage("Googleログイン後に入室できます");
   } else if (user) {
@@ -691,4 +703,7 @@ onUserChanged(function(user) {
 });
 
 gameUiRuntime.setRoomWord(roomWord);
+
+
+
 

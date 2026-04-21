@@ -1,35 +1,10 @@
 import { app, getCurrentUser } from "../shared/firebase.js";
-import { getUserData } from "../shared/userDate.js";
+import { getUserData, normalizeAvatarId, getAvatarImageById } from "../shared/userDate.js";
 
-const AVATAR_IMAGE_MAP = {
-  avatar_1: "/img/アバター/1-虹靴.png",
-  avatar_2: "/img/アバター/2-古い野球玉.png",
-  avatar_3: "/img/アバター/3-焼きちくわ.png",
-  avatar_4: "/img/アバター/4-ブルーアップル.png",
-  avatar_5: "/img/アバター/5-チーズ.png",
-  avatar_6: "/img/アバター/6-カラースプレー.png",
-  avatar_41: "/img/アバター/41-ネズミ.png",
-  avatar_42: "/img/アバター/42-ピンクカエル.png",
-  avatar_43: "/img/アバター/43-タバコマン.png",
-  avatar_44: "/img/アバター/44-凶悪アヒル.png",
-  avatar_71: "/img/アバター/71-素ゴリ.png",
-  avatar_72: "/img/アバター/72-素りな.png",
-  avatar_73: "/img/アバター/73-素めそ.png",
-  avatar_91: "/img/アバター/91-カエルゴリ.png",
-  avatar_92: "/img/アバター/92-カエルりな.png",
-  avatar_93: "/img/アバター/93-カエルめそ.png"
-};
-
-function normalizeAvatarId(value) {
-  const raw = String(value || "").trim();
-  if (!raw || raw === "default") return "";
-  const matched = raw.match(/([0-9]+)/);
-  return matched ? ("avatar_" + String(Number(matched[1]))) : raw;
-}
 
 function getAvatarImageFromUserData(data) {
   const avatarId = normalizeAvatarId(data && data.selectedAvatar);
-  return avatarId && AVATAR_IMAGE_MAP[avatarId] ? AVATAR_IMAGE_MAP[avatarId] : "";
+  return getAvatarImageById(avatarId) || "";
 }
 import { getDatabase, ref, set, get, update, remove, onValue, onDisconnect, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-database.js";
 
@@ -192,7 +167,6 @@ export function createDefaultGameState(previousChampionId, settings) {
   };
 }
 
-const ROOM_EXPIRE_MS = 2 * 60 * 60 * 1000;
 
 export function createRoomManager(options) {
   const {
@@ -258,21 +232,6 @@ export function createRoomManager(options) {
     return tx.snapshot.val() || {};
   }
 
-  function isExpiredRoomData(roomData) {
-    const createdAtMs = Number(roomData && roomData.createdAtMs) || 0;
-    const memberCount = Object.keys(roomData && roomData.members ? roomData.members : {}).length;
-    return !!createdAtMs && memberCount === 0 && (nowMs() - createdAtMs >= ROOM_EXPIRE_MS);
-  }
-
-  async function removeExpiredRoomIfNeeded(roomBaseRef, roomData) {
-    if (!isExpiredRoomData(roomData)) return false;
-    try {
-      await remove(roomBaseRef);
-    } catch (error) {
-      console.error(error);
-    }
-    return true;
-  }
 
   function syncHostFlag(humanList) {
     if (!roomId || !humanList.length) return;
@@ -336,8 +295,8 @@ export function createRoomManager(options) {
     memberRef = ref(db, roomPath + "/" + roomId + "/members/" + playerId);
     const roomSnap = await get(roomBaseRef);
     const roomData = roomSnap.val() || {};
-    const expiredRemoved = await removeExpiredRoomIfNeeded(roomBaseRef, roomData);
-    const effectiveRoomData = expiredRemoved ? {} : roomData;
+    const effectiveRoomData = roomData;
+    const shouldRebuildEmptyRoom = !!roomSnap.exists() && Object.keys(effectiveRoomData.members || {}).length === 0;
     const memberList = toMemberList(effectiveRoomData.members);
     const savedGame = effectiveRoomData.gameData || null;
     const roomSettings = normalizeRoomSettings(effectiveRoomData.settings);
@@ -346,7 +305,7 @@ export function createRoomManager(options) {
       throw new Error("この部屋はすでにゲーム中です");
     }
 
-    if (!roomSnap.exists()) {
+    if (!roomSnap.exists() || shouldRebuildEmptyRoom) {
       await set(roomBaseRef, {
         kind: "daidai-daifugo",
         createdAt: serverTimestamp(),
@@ -355,18 +314,7 @@ export function createRoomManager(options) {
         roomWord: word,
         gameStateVersion: 3,
         settings: roomSettings,
-        gameData: createDefaultGameState("", roomSettings)
-      });
-    } else if (!memberList.length) {
-      await set(roomBaseRef, {
-        kind: "daidai-daifugo",
-        createdAt: effectiveRoomData.createdAt || serverTimestamp(),
-        createdAtMs: effectiveRoomData.createdAtMs || nowMs(),
-        updatedAtMs: nowMs(),
-        roomWord: word,
-        gameStateVersion: 3,
-        settings: roomSettings,
-        gameData: createDefaultGameState(effectiveRoomData.lastResult && effectiveRoomData.lastResult.topPlayerId, roomSettings)
+        gameData: createDefaultGameState(shouldRebuildEmptyRoom ? (effectiveRoomData.lastResult && effectiveRoomData.lastResult.topPlayerId) : "", roomSettings)
       });
     } else {
       await update(roomBaseRef, { updatedAt: serverTimestamp(), updatedAtMs: nowMs() });
@@ -394,7 +342,7 @@ export function createRoomManager(options) {
       }
     }
     const safeMeta = resolvedMeta && typeof resolvedMeta === "object" ? resolvedMeta : {};
-    const amHostPlayer = memberList.length === 0;
+    const amHostPlayer = !roomSnap.exists() || shouldRebuildEmptyRoom || memberList.length === 0;
     onDisconnect(memberRef).remove();
     await set(memberRef, {
       name: playerName,
@@ -410,7 +358,7 @@ export function createRoomManager(options) {
     if (unwatchRoom) unwatchRoom();
     unwatchRoom = onValue(roomBaseRef, function(snapshot) {
       const data = snapshot.val() || {};
-      if (!snapshot.exists() || isExpiredRoomData(data)) {
+      if (!snapshot.exists()) {
         if (unwatchRoom) {
           unwatchRoom();
           unwatchRoom = null;
@@ -509,9 +457,10 @@ export function createRoomManager(options) {
         const afterMembersSnap = await get(ref(db, roomPath + "/" + roomId + "/members"));
         const remainMembers = toMemberList(afterMembersSnap.val());
         if (!remainMembers.length) {
-          await update(roomBaseRef, {
-            updatedAt: serverTimestamp(),
-            updatedAtMs: nowMs(),
+          await remove(roomBaseRef).catch(console.error);
+        } else if (!remainMembers.some(function(member) { return member.isHost; })) {
+          await update(ref(db, roomPath + "/" + roomId + "/members/" + remainMembers[0].id), {
+            isHost: true
           }).catch(console.error);
         }
         memberRef = null;
@@ -549,4 +498,6 @@ export function createRoomManager(options) {
     runRoomTransaction
   };
 }
+
+
 

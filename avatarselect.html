@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeiSeigames - アバター選択</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --text: #f8fafc;
+      --sub: #cbd5e1;
+      --panel-border: rgba(255, 255, 255, 0.12);
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 30%),
+        radial-gradient(circle at top right, rgba(129, 140, 248, 0.16), transparent 28%),
+        linear-gradient(160deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.98));
+    }
+
+    .avatar-select-page {
+      width: min(100%, 1660px);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .avatar-select-topbar-mount {
+      margin-bottom: 0;
+    }
+
+    .avatar-select-message-box {
+      min-height: 24px;
+      margin: 16px 0;
+      color: #fde68a;
+      font-size: 14px;
+      line-height: 1.7;
+      word-break: break-word;
+    }
+
+    .avatar-select-grid {
+      display: grid;
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+      gap: 20px 18px;
+      align-items: start;
+    }
+
+    .avatar-select-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .avatar-select-card {
+      position: relative;
+      appearance: none;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border: 3px solid rgba(255,255,255,0.18);
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(125, 211, 252, 0.08), rgba(129, 140, 248, 0.08));
+      color: #f8fafc;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      overflow: hidden;
+      transition: transform 0.16s ease, filter 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    .avatar-select-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .avatar-select-card.rank-c {
+      border-color: rgba(255,255,255,0.78);
+    }
+
+    .avatar-select-card.rank-b {
+      border-color: rgba(59, 130, 246, 0.95);
+    }
+
+    .avatar-select-card.rank-a {
+      border-color: rgba(239, 68, 68, 0.95);
+    }
+
+    .avatar-select-card.rank-s {
+      border-color: rgba(245, 197, 24, 0.98);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.18), inset 0 1px 0 rgba(255,255,255,0.12);
+    }
+
+    .avatar-select-card.selected {
+      transform: translateY(-2px);
+      box-shadow: 0 0 0 3px rgba(138, 255, 169, 0.24), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    .avatar-select-card.locked {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.03));
+      opacity: 0.92;
+    }
+
+    .avatar-select-preview {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.12), transparent 22%),
+        radial-gradient(circle at 70% 75%, rgba(129, 140, 248, 0.18), transparent 28%),
+        rgba(255,255,255,0.05);
+    }
+
+    .avatar-select-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .avatar-select-preview-fallback {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      font-size: clamp(28px, 2.2vw, 44px);
+      font-weight: 900;
+      color: #f8fafc;
+      background: transparent;
+    }
+
+    .avatar-select-no {
+      font-size: 16px;
+      line-height: 1;
+      font-weight: 900;
+      color: rgba(248, 250, 252, 0.92);
+    }
+
+    @media (max-width: 1400px) {
+      .avatar-select-grid {
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .avatar-select-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 860px) {
+      .avatar-select-page {
+        padding: 14px 14px 24px;
+      }
+
+      .avatar-select-message-box {
+        font-size: 15px;
+      }
+
+      .avatar-select-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      .avatar-select-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="avatar-select-page">
+    <div id="avatarSelectTopbarMount" class="avatar-select-topbar-mount"></div>
+    <div id="avatarSelectMessage" class="avatar-select-message-box"></div>
+    <section id="avatarSelectGrid" class="avatar-select-grid"></section>
+  </main>
+
+  <script type="module">
+    import { onUserChanged } from "./shared/firebase.js";
+    import {
+      getUserData,
+      selectAvatar,
+      getAvatarCatalog,
+      getAvatarImageById,
+      normalizeAvatarId
+    } from "./shared/userDate.js";
+    import { createTopbar } from "./topbar.js";
+
+    const topbarMount = document.getElementById("avatarSelectTopbarMount");
+    const messageBox = document.getElementById("avatarSelectMessage");
+    const grid = document.getElementById("avatarSelectGrid");
+
+    let currentUser = null;
+    let currentProfile = null;
+    let topbar = null;
+
+    function setMessage(text) {
+      if (messageBox) messageBox.textContent = String(text || "");
+    }
+
+    function getProfileAvatarImage(profile) {
+      const selectedAvatar = normalizeAvatarId(profile && profile.selectedAvatar ? profile.selectedAvatar : "");
+      return String(getAvatarImageById(selectedAvatar) || "").replace(/^\//, "");
+    }
+
+    function getRank(no) {
+      if (no >= 91) return "s";
+      if (no >= 71) return "a";
+      if (no >= 41) return "b";
+      return "c";
+    }
+
+    function getOwnedSet(profile) {
+      const list = Array.isArray(profile && profile.ownedAvatars) ? profile.ownedAvatars : [];
+      return new Set(list.map(function(item) { return normalizeAvatarId(item); }));
+    }
+
+    function buildAvatarList() {
+      const catalog = getAvatarCatalog();
+      const map = new Map();
+      catalog.forEach(function(item) {
+        map.set(normalizeAvatarId(item.id), {
+          id: normalizeAvatarId(item.id),
+          name: String(item.name || ""),
+          image: String(item.image || "").replace(/^\//, "")
+        });
+      });
+
+      const ownedSet = getOwnedSet(currentProfile);
+      const selectedId = normalizeAvatarId(currentProfile && currentProfile.selectedAvatar ? currentProfile.selectedAvatar : "");
+      const items = [];
+
+      for (let no = 1; no <= 100; no += 1) {
+        const id = "avatar_" + String(no);
+        const info = map.get(id);
+        items.push({
+          id: id,
+          no: no,
+          rank: getRank(no),
+          owned: ownedSet.has(id),
+          selected: id === selectedId,
+          image: info ? info.image : "",
+          name: info ? info.name : "No" + String(no)
+        });
+      }
+
+      return items;
+    }
+
+    function applyTopbarProfile() {
+      if (!topbar) return;
+      const nickname = String((currentProfile && currentProfile.nickname) || "ニックネーム未設定");
+      const coin = Number((currentProfile && currentProfile.coin) || 0);
+      const fragment = Number((currentProfile && currentProfile.avatarFragment) || 0);
+      const avatarImage = getProfileAvatarImage(currentProfile);
+      topbar.setProfile({ nickname: nickname, subText: "ユーザー情報", photoURL: avatarImage });
+      topbar.setStatText("coin", "コイン: " + coin);
+      topbar.setStatText("fragment", "欠片: " + fragment);
+    }
+
+    function ensureTopbar() {
+      if (topbar || !topbarMount) return;
+      topbar = createTopbar({
+        profile: { nickname: "---", subText: "ユーザー情報", photoURL: "" },
+        stats: [
+          { id: "coin", text: "コイン: 0" },
+          { id: "fragment", text: "欠片: 0" }
+        ],
+        actions: [
+          { id: "gacha", label: "アバターガチャ", onClick: function() { window.location.href = "./avatargacha.html"; } },
+          { id: "select", label: "ゲーム選択", onClick: function() { window.location.href = "./selectgame.html"; } },
+          { id: "home", label: "ホーム", onClick: function() { window.location.href = "./home.html"; } }
+        ]
+      });
+      topbarMount.appendChild(topbar.element);
+    }
+
+    function render() {
+      if (!grid) return;
+      const items = buildAvatarList();
+      grid.innerHTML = "";
+
+      items.forEach(function(item) {
+        const slot = document.createElement("div");
+        slot.className = "avatar-select-slot";
+
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "avatar-select-card rank-" + item.rank + (item.owned ? "" : " locked") + (item.selected ? " selected" : "");
+
+        const preview = document.createElement("div");
+        preview.className = "avatar-select-preview";
+
+        if (item.owned && item.image) {
+          const image = document.createElement("img");
+          image.src = item.image;
+          image.alt = item.name || "avatar";
+          preview.appendChild(image);
+        } else {
+          const fallback = document.createElement("div");
+          fallback.className = "avatar-select-preview-fallback";
+          fallback.textContent = "?";
+          preview.appendChild(fallback);
+        }
+
+        const no = document.createElement("div");
+        no.className = "avatar-select-no";
+        no.textContent = "No" + String(item.no);
+
+        card.appendChild(preview);
+        slot.append(card, no);
+        grid.appendChild(slot);
+
+        card.addEventListener("click", async function() {
+          if (!item.owned) {
+            setMessage("No" + String(item.no) + " はまだ持っていません");
+            return;
+          }
+          if (item.selected) {
+            setMessage("No" + String(item.no) + " が選ばれています");
+            return;
+          }
+          try {
+            await selectAvatar(item.id, currentUser);
+            currentProfile = await getUserData(currentUser);
+            applyTopbarProfile();
+            render();
+            setMessage("No" + String(item.no) + " に変更しました");
+          } catch (error) {
+            console.error(error);
+            setMessage(error && error.message ? error.message : "変更に失敗しました");
+          }
+        });
+      });
+    }
+
+    async function loadProfile(user) {
+      currentProfile = await getUserData(user);
+      applyTopbarProfile();
+      render();
+    }
+
+    ensureTopbar();
+
+    onUserChanged(async function(user) {
+      if (!user) {
+        window.location.href = "./home.html";
+        return;
+      }
+      currentUser = user;
+      await loadProfile(user);
+    });
+  </script>
+</body>
+</html>
+

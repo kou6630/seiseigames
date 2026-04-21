@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeiSeigames - アバターガチャ</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --text: #f8fafc;
+      --sub: #cbd5e1;
+      --panel-border: rgba(255, 255, 255, 0.12);
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      color: var(--text);
+      background: #dcdcdc center center / cover no-repeat;
+      overflow: hidden;
+    }
+
+    .avatar-gacha-page {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow: hidden;
+      background: #dcdcdc center center / cover no-repeat;
+    }
+
+    .avatar-gacha-background {
+      position: absolute;
+      inset: 0;
+      background-position: center center;
+      background-size: cover;
+      background-repeat: no-repeat;
+      opacity: 1;
+      pointer-events: none;
+    }
+
+    .avatar-gacha-earth-wrap {
+      position: absolute;
+      left: 50%;
+      top: 31%;
+      transform: translate(-50%, -50%);
+      width: min(34vw, 360px);
+      aspect-ratio: 1 / 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      filter: drop-shadow(0 0 18px rgba(65, 160, 255, 0.18));
+    }
+
+    .avatar-gacha-earth {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      animation: avatar-gacha-earth-rotate 18s linear infinite;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .avatar-gacha-flash {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: #ffffff;
+      opacity: 0;
+    }
+
+    .avatar-gacha-ui {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 28px 32px 40px;
+      pointer-events: none;
+    }
+
+    .avatar-gacha-topbar-mount {
+      width: min(100%, 1100px);
+      margin-bottom: 0;
+      pointer-events: auto;
+      align-self: center;
+    }
+
+    .avatar-gacha-bottom {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 18px;
+      flex: 1;
+      pointer-events: auto;
+    }
+
+    .avatar-gacha-message {
+      display: none;
+    }
+
+    .avatar-gacha-buttons {
+      width: 100%;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 32px;
+      padding: 0 20%;
+    }
+
+    .avatar-gacha-button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      transition: transform 0.16s ease, filter 0.16s ease, opacity 0.16s ease;
+      filter: drop-shadow(0 22px 30px rgba(0,0,0,0.34));
+    }
+
+    .avatar-gacha-button:hover {
+      transform: translateY(-2px) scale(1.01);
+    }
+
+    .avatar-gacha-button:active {
+      transform: translateY(0) scale(0.99);
+    }
+
+    .avatar-gacha-button:disabled {
+      opacity: 0.72;
+      cursor: default;
+      transform: none;
+    }
+
+    .avatar-gacha-button-image {
+      display: block;
+      width: min(18vw, 220px);
+      max-width: 220px;
+      min-width: 180px;
+      height: auto;
+      user-select: none;
+      -webkit-user-drag: none;
+      pointer-events: none;
+    }
+
+    .avatar-gacha-result {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%) scale(0.86);
+      width: min(92vw, 880px);
+      padding: 24px;
+      border-radius: 28px;
+      background: rgba(8, 18, 40, 0.8);
+      border: 1px solid var(--panel-border);
+      box-shadow: 0 28px 80px rgba(0,0,0,0.34);
+      backdrop-filter: blur(14px);
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .avatar-gacha-result.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      transition: opacity 180ms ease, transform 220ms ease;
+      pointer-events: auto;
+    }
+
+    .avatar-gacha-result-label {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: rgba(184, 223, 255, 0.9);
+    }
+
+    .avatar-gacha-result-name {
+      margin-top: 12px;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.08;
+      font-weight: 900;
+      color: #ffffff;
+      text-shadow: 0 12px 26px rgba(0,0,0,0.26);
+      word-break: break-word;
+    }
+
+    .avatar-gacha-result-note {
+      margin-top: 12px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: rgba(230, 240, 255, 0.86);
+    }
+
+    .avatar-gacha-result-grid {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .avatar-gacha-result-card {
+      aspect-ratio: 1 / 1;
+      border-radius: 20px;
+      border: 2px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px;
+      font-size: 18px;
+      font-weight: 900;
+      color: #ffffff;
+      word-break: break-word;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .avatar-gacha-result-card img {
+      width: 100%;
+      height: 100%;
+      max-width: 88px;
+      max-height: 88px;
+      object-fit: contain;
+      user-select: none;
+      -webkit-user-drag: none;
+      flex: 1;
+    }
+
+    .avatar-gacha-result-card-name {
+      font-size: 14px;
+      line-height: 1.3;
+      font-weight: 900;
+    }
+
+    @keyframes avatar-gacha-earth-rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 900px) {
+      .avatar-gacha-page {
+        padding: 16px;
+      }
+
+      .avatar-gacha-ui {
+        padding: 18px 16px 20px;
+      }
+
+      .avatar-gacha-button-image {
+        width: min(34vw, 220px);
+        min-width: 130px;
+      }
+
+      .avatar-gacha-buttons {
+        padding: 0 4%;
+        gap: 16px;
+      }
+
+      .avatar-gacha-earth-wrap {
+        width: min(46vw, 260px);
+        top: 29%;
+      }
+
+      .avatar-gacha-result-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="avatar-gacha-page">
+    <div class="avatar-gacha-background"></div>
+
+    <div class="avatar-gacha-earth-wrap">
+      <img class="avatar-gacha-earth" src="img/ガチャ画面/地球.jpg" alt="地球" />
+    </div>
+
+    <div class="avatar-gacha-flash"></div>
+
+    <div class="avatar-gacha-ui">
+      <div id="avatarGachaTopbarMount" class="avatar-gacha-topbar-mount"></div>
+
+      <div class="avatar-gacha-bottom">
+        <div id="avatarGachaMessage" class="avatar-gacha-message">1回 100コイン / 5回 500コイン</div>
+
+        <div class="avatar-gacha-buttons">
+          <button type="button" id="singleGachaBtn" class="avatar-gacha-button" aria-label="1回ガチャる">
+            <img class="avatar-gacha-button-image" src="img/ガチャ画面/1回ガチャ.png" alt="1回ガチャる" />
+          </button>
+
+          <button type="button" id="fiveGachaBtn" class="avatar-gacha-button" aria-label="5回ガチャる">
+            <img class="avatar-gacha-button-image" src="img/ガチャ画面/5回ガチャ.png" alt="5回ガチャる" />
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <section id="avatarGachaResult" class="avatar-gacha-result">
+      <div class="avatar-gacha-result-label">GET</div>
+      <div id="avatarGachaResultName" class="avatar-gacha-result-name"></div>
+      <div id="avatarGachaResultNote" class="avatar-gacha-result-note"></div>
+      <div id="avatarGachaResultGrid" class="avatar-gacha-result-grid"></div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { onUserChanged } from "./shared/firebase.js";
+    import {
+      getUserData,
+      resolveAvatarGachaBatch,
+      getAvatarCatalog,
+      getAvatarImageById,
+      normalizeAvatarId
+    } from "./shared/userDate.js";
+    import { createTopbar } from "./topbar.js";
+
+    const topbarMount = document.getElementById("avatarGachaTopbarMount");
+    const background = document.querySelector(".avatar-gacha-background");
+    const singleGachaBtn = document.getElementById("singleGachaBtn");
+    const fiveGachaBtn = document.getElementById("fiveGachaBtn");
+    const resultBox = document.getElementById("avatarGachaResult");
+    const resultName = document.getElementById("avatarGachaResultName");
+    const resultNote = document.getElementById("avatarGachaResultNote");
+    const resultGrid = document.getElementById("avatarGachaResultGrid");
+
+    const SINGLE_COST = 100;
+    const FIVE_COST = 500;
+    const FRAGMENT_IMAGE = "img/その他/アバターの欠片.png";
+
+    let currentUser = null;
+    let currentProfile = null;
+    let topbar = null;
+    let isPlaying = false;
+
+    function getProfileAvatarImage(profile) {
+      const selectedAvatar = normalizeAvatarId(profile && profile.selectedAvatar ? profile.selectedAvatar : "");
+      return String(getAvatarImageById(selectedAvatar) || "").replace(/^\//, "");
+    }
+
+    function getPool() {
+      return getAvatarCatalog().map(function(item) {
+        return {
+          id: String(item.id || ""),
+          name: String(item.name || ""),
+          image: String(item.image || "").replace(/^\//, ""),
+          rarity: String(item.rarity || "")
+        };
+      });
+    }
+
+    function pickRarity() {
+      const roll = Math.random() * 100;
+      if (roll < 0.5) return "S";
+      if (roll < 1.5) return "A";
+      if (roll < 30) return "B";
+      return "C";
+    }
+
+    function pickAvatar() {
+      const rarity = pickRarity();
+      const pool = getPool();
+      const targets = pool.filter(function(item) {
+        return item.rarity === rarity;
+      });
+      const usePool = targets.length ? targets : pool;
+      return usePool[Math.floor(Math.random() * usePool.length)];
+    }
+
+    function applyTopbarProfile() {
+      if (!topbar) return;
+      const nickname = String((currentProfile && currentProfile.nickname) || "ニックネーム未設定");
+      const coin = Number((currentProfile && currentProfile.coin) || 0);
+      const fragment = Number((currentProfile && currentProfile.avatarFragment) || 0);
+      const avatarImage = getProfileAvatarImage(currentProfile);
+      topbar.setProfile({ nickname: nickname, subText: "ユーザー情報", photoURL: avatarImage });
+      topbar.setStatText("coin", "コイン: " + coin);
+      topbar.setStatText("fragment", "欠片: " + fragment);
+    }
+
+    function ensureTopbar() {
+      if (topbar || !topbarMount) return;
+      topbar = createTopbar({
+        profile: { nickname: "---", subText: "ユーザー情報", photoURL: "" },
+        stats: [
+          { id: "coin", text: "コイン: 0" },
+          { id: "fragment", text: "欠片: 0" }
+        ],
+        actions: [
+          { id: "avatar", label: "アバター選択", onClick: function() { window.location.href = "./avatarselect.html"; } },
+          { id: "select", label: "ゲーム選択", onClick: function() { window.location.href = "./selectgame.html"; } },
+          { id: "home", label: "ホーム", onClick: function() { window.location.href = "./home.html"; } }
+        ]
+      });
+      topbarMount.appendChild(topbar.element);
+    }
+
+    function wait(ms) {
+      return new Promise(function(resolve) {
+        window.setTimeout(resolve, ms);
+      });
+    }
+
+    function hideResult() {
+      resultBox.classList.remove("show");
+      resultName.textContent = "";
+      resultNote.textContent = "";
+      resultGrid.innerHTML = "";
+    }
+
+    function showResult(items) {
+      const safeItems = Array.isArray(items) ? items : [];
+      resultGrid.innerHTML = "";
+      resultName.textContent = safeItems.length === 1 ? String(safeItems[0].name || "") : "ガチャ結果";
+      resultNote.textContent = "画面クリックで閉じる";
+
+      safeItems.forEach(function(item) {
+        const card = document.createElement("div");
+        card.className = "avatar-gacha-result-card";
+
+        if (item.image) {
+          const image = document.createElement("img");
+          image.src = item.image;
+          image.alt = item.name || "avatar";
+          card.appendChild(image);
+        }
+
+        const name = document.createElement("div");
+        name.className = "avatar-gacha-result-card-name";
+        name.textContent = String(item.name || "---");
+        card.appendChild(name);
+        resultGrid.appendChild(card);
+      });
+
+      resultBox.classList.add("show");
+    }
+
+    async function loadProfile(user) {
+      currentProfile = await getUserData(user);
+      applyTopbarProfile();
+      return currentProfile;
+    }
+
+    async function playDraw(count) {
+      if (!currentUser || isPlaying) return;
+      isPlaying = true;
+      hideResult();
+      singleGachaBtn.disabled = true;
+      fiveGachaBtn.disabled = true;
+
+      try {
+        const picks = Array.from({ length: count }, function() {
+          return pickAvatar();
+        });
+        const cost = count === 5 ? FIVE_COST : SINGLE_COST;
+        await wait(1200);
+        const result = await resolveAvatarGachaBatch(
+          picks.map(function(item) { return item.id; }),
+          cost,
+          currentUser
+        );
+        if (result && result.userData) currentProfile = result.userData;
+        applyTopbarProfile();
+
+        const duplicated = Array.isArray(result && result.duplicatedAvatarIds) ? result.duplicatedAvatarIds : [];
+        const displayItems = picks.map(function(item) {
+          if (duplicated.includes(item.id)) {
+            return {
+              image: FRAGMENT_IMAGE,
+              name: "アバターの欠片"
+            };
+          }
+          return {
+            image: item.image,
+            name: item.name
+          };
+        });
+        showResult(displayItems);
+      } catch (error) {
+        console.error(error);
+        resultName.textContent = error && error.message ? error.message : "ガチャに失敗しました";
+        resultNote.textContent = "画面クリックで閉じる";
+        resultGrid.innerHTML = "";
+        resultBox.classList.add("show");
+      } finally {
+        singleGachaBtn.disabled = false;
+        fiveGachaBtn.disabled = false;
+        isPlaying = false;
+      }
+    }
+
+    if (background) {
+      background.style.backgroundImage = 'url("img/ガチャ画面/ガチャ背景.jpg")';
+    }
+
+    if (singleGachaBtn) {
+      singleGachaBtn.addEventListener("click", function() {
+        playDraw(1);
+      });
+    }
+
+    if (fiveGachaBtn) {
+      fiveGachaBtn.addEventListener("click", function() {
+        playDraw(5);
+      });
+    }
+
+    if (resultBox) {
+      resultBox.addEventListener("click", function() {
+        if (!isPlaying) hideResult();
+      });
+    }
+
+    ensureTopbar();
+
+    onUserChanged(async function(user) {
+      if (!user) {
+        window.location.href = "./home.html";
+        return;
+      }
+      currentUser = user;
+      await loadProfile(user);
+    });
+  </script>
+</body>
+</html>
+

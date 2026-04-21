@@ -18,7 +18,14 @@ function injectTopbarStyles() {
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+    }
+
+    .seisei-topbar.same-as-selectgame {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .seisei-topbar-left {
@@ -26,7 +33,9 @@ function injectTopbarStyles() {
       align-items: center;
       gap: 12px;
       min-width: 0;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      flex: 1 1 auto;
+      overflow: hidden;
     }
 
     .seisei-topbar-avatar {
@@ -56,18 +65,60 @@ function injectTopbarStyles() {
       min-width: 0;
     }
 
+    .seisei-topbar-profile {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      flex: 1 1 auto;
+      overflow: hidden;
+    }
+
+    .seisei-topbar-stats {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: nowrap;
+      min-width: 0;
+      flex-shrink: 0;
+    }
+
+    .seisei-topbar-stat {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .seisei-topbar-stat.hidden {
+      display: none;
+    }
+
     .seisei-topbar-name {
       font-size: 16px;
       font-weight: 700;
       color: #f8fafc;
       word-break: break-word;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .seisei-topbar-sub {
       margin-top: 2px;
       font-size: 13px;
       color: #cbd5e1;
-      word-break: break-all;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .seisei-topbar-actions {
@@ -75,8 +126,17 @@ function injectTopbarStyles() {
       justify-content: flex-end;
       align-items: center;
       gap: 10px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    .seisei-topbar-inline-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: nowrap;
+      flex-shrink: 0;
     }
 
     .seisei-topbar-button {
@@ -156,29 +216,59 @@ function createButton(item = {}) {
   if (item.id) button.dataset.topbarId = String(item.id);
   if (item.ariaLabel) button.setAttribute("aria-label", String(item.ariaLabel));
   if (item.hidden) button.classList.add("hidden");
+  if (item.title) button.title = String(item.title);
   return button;
+}
+
+function normalizePosition(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "left") return "left";
+  if (raw === "stats") return "stats";
+  return "right";
 }
 
 export function createTopbar(options = {}) {
   injectTopbarStyles();
 
-  const root = createElement("div", "seisei-topbar");
+  const root = createElement("div", "seisei-topbar same-as-selectgame");
   const left = createElement("div", "seisei-topbar-left");
   const avatar = createElement("div", "seisei-topbar-avatar");
+  const profile = createElement("div", "seisei-topbar-profile");
   const meta = createElement("div", "seisei-topbar-meta");
   const name = createElement("div", "seisei-topbar-name", "---");
-  const sub = createElement("div", "seisei-topbar-sub", "コイン: 0");
+  const sub = createElement("div", "seisei-topbar-sub", "ユーザー情報");
+  const stats = createElement("div", "seisei-topbar-stats");
+  const inlineActions = createElement("div", "seisei-topbar-inline-actions");
   const actions = createElement("div", "seisei-topbar-actions");
 
+  if (options.className) {
+    root.className = `seisei-topbar same-as-selectgame ${String(options.className).trim()}`.trim();
+  }
+
   meta.append(name, sub);
-  left.append(avatar, meta);
+  profile.append(avatar, meta);
+  left.append(inlineActions, profile, stats);
   root.append(left, actions);
 
   const buttons = new Map();
+  const statsMap = new Map();
+  const statItems = Array.isArray(options.stats) ? options.stats : [];
+  statItems.forEach(function(item) {
+    const stat = createElement("div", "seisei-topbar-stat", item && item.text ? item.text : "");
+    if (item && item.id) {
+      stat.dataset.topbarStatId = String(item.id);
+      statsMap.set(String(item.id), stat);
+    }
+    if (item && item.hidden) stat.classList.add("hidden");
+    stats.appendChild(stat);
+  });
+
   const actionItems = Array.isArray(options.actions) ? options.actions : [];
   actionItems.forEach(function(item) {
     const button = createButton(item);
-    actions.appendChild(button);
+    const position = normalizePosition(item && item.position);
+    const target = position === "left" ? inlineActions : actions;
+    target.appendChild(button);
     if (item.id) {
       buttons.set(String(item.id), button);
     }
@@ -191,10 +281,22 @@ export function createTopbar(options = {}) {
 
   function setProfile(profile = {}) {
     const nickname = String(profile.nickname || profile.name || "---");
-    const coin = Number(profile.coin || 0);
     name.textContent = nickname;
-    sub.textContent = typeof profile.subText === "string" ? profile.subText : `コイン: ${coin}`;
+    sub.textContent = typeof profile.subText === "string" ? profile.subText : "ユーザー情報";
+    sub.style.display = sub.textContent ? "block" : "none";
     setAvatarContent(avatar, profile.photoURL, nickname);
+  }
+
+  function setStatText(id, text) {
+    const stat = statsMap.get(String(id));
+    if (!stat) return;
+    stat.textContent = String(text || "");
+  }
+
+  function setStatVisible(id, visible) {
+    const stat = statsMap.get(String(id));
+    if (!stat) return;
+    stat.classList.toggle("hidden", !visible);
   }
 
   function setButtonVisible(id, visible) {
@@ -222,6 +324,8 @@ export function createTopbar(options = {}) {
   const api = {
     element: root,
     setProfile,
+    setStatText,
+    setStatVisible,
     setButtonVisible,
     setButtonText,
     setButtonDisabled,
@@ -232,4 +336,3 @@ export function createTopbar(options = {}) {
 
   return api;
 }
-
