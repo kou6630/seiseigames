@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeiSeigames</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --bg-1: #0f172a;
+      --bg-2: #1e293b;
+      --panel: rgba(15, 23, 42, 0.72);
+      --panel-border: rgba(255, 255, 255, 0.12);
+      --text: #f8fafc;
+      --sub: #cbd5e1;
+      --accent: #38bdf8;
+      --accent-2: #818cf8;
+      --danger: #ef4444;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 32%),
+        radial-gradient(circle at top right, rgba(129, 140, 248, 0.22), transparent 28%),
+        linear-gradient(160deg, var(--bg-1), var(--bg-2));
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+
+    .page {
+      width: 100%;
+      max-width: 1100px;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 24px;
+      opacity: 0;
+      transform: translateY(18px);
+      animation: heroReveal 1.2s ease forwards;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(36px, 6vw, 68px);
+      line-height: 1.05;
+      letter-spacing: 0.01em;
+      text-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    .hero .accent {
+      background: linear-gradient(90deg, #7dd3fc, #a5b4fc, #67e8f9);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      overflow: hidden;
+      animation: fadeUp 0.8s ease;
+    }
+
+    .card-inner {
+      padding: 28px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--sub);
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #f59e0b;
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.55);
+    }
+
+    .dot.ok {
+      background: #22c55e;
+      box-shadow: 0 0 14px rgba(34, 197, 94, 0.55);
+    }
+
+    .auth-section {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 20px;
+    }
+
+    .panel {
+      border-radius: 22px;
+      padding: 22px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .user-box {
+      display: none;
+      gap: 16px;
+      align-items: center;
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .user-box.show {
+      display: flex;
+    }
+
+    .avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .user-meta {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .user-name {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+
+    .user-mail {
+      color: var(--sub);
+      font-size: 14px;
+      word-break: break-all;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    button,
+    .menu-card {
+      appearance: none;
+      border: 0;
+      cursor: pointer;
+      transition: transform 0.18s ease, opacity 0.18s ease, background 0.18s ease;
+    }
+
+    button {
+      border-radius: 16px;
+      padding: 14px 18px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    button:hover,
+    .menu-card:hover {
+      transform: translateY(-1px);
+    }
+
+    button:active,
+    .menu-card:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .primary {
+      color: #08111f;
+      background: linear-gradient(90deg, #7dd3fc, #a5b4fc);
+    }
+
+    .danger {
+      color: #fff;
+      background: rgba(239, 68, 68, 0.9);
+    }
+
+    .side-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      height: 100%;
+    }
+
+    .menu-card {
+      border-radius: 24px;
+      padding: 20px;
+      background: linear-gradient(135deg, rgba(125, 211, 252, 0.08), rgba(165, 180, 252, 0.08));
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      min-height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      text-decoration: none;
+    }
+
+    .menu-card.locked {
+      opacity: 0.4;
+      filter: grayscale(0.2) brightness(0.72);
+      pointer-events: none;
+    }
+
+    .menu-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 42%);
+      pointer-events: none;
+    }
+
+    .menu-card h3 {
+      margin: 0;
+      font-size: clamp(28px, 3.2vw, 38px);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1.2;
+      background: linear-gradient(90deg, #e0f2fe, #c4b5fd, #a5f3fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+      position: relative;
+      z-index: 1;
+    }
+
+    .message {
+      margin-top: 18px;
+      min-height: 24px;
+      color: #fde68a;
+      font-size: 14px;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes heroReveal {
+      0% {
+        opacity: 0;
+        transform: translateY(18px) scale(0.985);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @media (max-width: 860px) {
+      .auth-section {
+        grid-template-columns: 1fr;
+      }
+
+      .card-inner {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1><span class="accent">SeiSeigames</span>へようこそ。</h1>
+    </section>
+
+    <section class="card">
+      <div class="card-inner">
+        <div class="status-row">
+          <div class="status-pill" id="statusPill">
+            <span class="dot" id="statusDot"></span>
+            <span id="statusText">ログイン状態を確認しています</span>
+          </div>
+        </div>
+
+        <div class="auth-section">
+          <div class="panel">
+            <div class="user-box" id="userBox">
+              <img id="userPhoto" class="avatar" alt="avatar" src="" />
+              <div class="user-meta">
+                <div class="user-name" id="userName">---</div>
+                <div class="user-mail" id="userEmail">---</div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button id="loginBtn" class="primary">Googleでログイン</button>
+              <button id="logoutBtn" class="danger" style="display:none;">ログアウト</button>
+            </div>
+
+            <div class="message" id="message"></div>
+          </div>
+
+          <div class="panel">
+            <div class="side-menu">
+              <a class="menu-card" id="gameSelectCard" href="./selectgame.html">
+                <h3>ゲーム選択</h3>
+              </a>
+              <a class="menu-card" id="avatarGachaCard" href="./avatargacha.html">
+                <h3>アバターガチャ</h3>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+  import {
+    signInWithGoogle,
+    signOutUser,
+    onUserChanged,
+  } from "./shared/firebase.js";
+  import {
+    getUserData,
+    getAvatarImageById,
+    normalizeAvatarId,
+  } from "./shared/userDate.js";
+
+  const statusDot = document.getElementById("statusDot");
+  const statusText = document.getElementById("statusText");
+  const loginBtn = document.getElementById("loginBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const userBox = document.getElementById("userBox");
+  const userPhoto = document.getElementById("userPhoto");
+  const userName = document.getElementById("userName");
+  const userEmail = document.getElementById("userEmail");
+  const message = document.getElementById("message");
+  const gameSelectCard = document.getElementById("gameSelectCard");
+  const avatarGachaCard = document.getElementById("avatarGachaCard");
+  const pageCards = [gameSelectCard, avatarGachaCard];
+
+  function setMessage(text = "") {
+    if (message) message.textContent = String(text || "");
+  }
+
+  function setLockedState(locked) {
+    pageCards.forEach(function(card) {
+      if (!card) return;
+      card.classList.toggle("locked", Boolean(locked));
+      card.setAttribute("aria-disabled", locked ? "true" : "false");
+    });
+  }
+
+  function setAvatarImage(imagePath, altText) {
+    if (!userPhoto) return;
+    const src = String(imagePath || "").trim();
+    if (!src) {
+      userPhoto.removeAttribute("src");
+      userPhoto.alt = altText || "avatar";
+      return;
+    }
+    userPhoto.src = src;
+    userPhoto.alt = altText || "avatar";
+  }
+
+  function getProfileAvatarImage(profile) {
+    const selectedAvatar = normalizeAvatarId(profile && profile.selectedAvatar ? profile.selectedAvatar : "");
+    return String(getAvatarImageById(selectedAvatar) || "").replace(/^\//, "");
+  }
+
+  function applyLoggedOutView() {
+    if (statusDot) statusDot.classList.remove("ok");
+    if (statusText) statusText.textContent = "ログインしてください";
+    if (loginBtn) loginBtn.style.display = "inline-flex";
+    if (logoutBtn) logoutBtn.style.display = "none";
+    if (userBox) userBox.classList.remove("show");
+    if (userName) userName.textContent = "---";
+    if (userEmail) userEmail.textContent = "---";
+    setAvatarImage("", "avatar");
+    setLockedState(true);
+  }
+
+  async function applyLoggedInView(user) {
+    let profile = null;
+
+    try {
+      profile = await getUserData(user);
+    } catch (error) {
+      console.error(error);
+    }
+
+    const nickname = String(
+      (profile && profile.nickname) ||
+      user.displayName ||
+      (user.email ? String(user.email).split("@")[0] : "ゲスト") ||
+      "ゲスト"
+    ).trim();
+
+    const avatarImage = getProfileAvatarImage(profile);
+
+    if (statusDot) statusDot.classList.add("ok");
+    if (statusText) statusText.textContent = "ログイン中";
+    if (loginBtn) loginBtn.style.display = "none";
+    if (logoutBtn) logoutBtn.style.display = "inline-flex";
+    if (userBox) userBox.classList.add("show");
+    if (userName) userName.textContent = nickname || "ゲスト";
+    if (userEmail) userEmail.textContent = user.email || "";
+    setAvatarImage(avatarImage, nickname || "avatar");
+    setLockedState(false);
+  }
+
+  pageCards.forEach(function(card) {
+    if (!card) return;
+    card.addEventListener("click", function(event) {
+      if (card.classList.contains("locked")) {
+        event.preventDefault();
+        event.stopPropagation();
+        setMessage("ログイン後に使えます");
+      }
+    });
+  });
+
+  if (loginBtn) {
+    loginBtn.addEventListener("click", async function() {
+      loginBtn.disabled = true;
+      setMessage("");
+      try {
+        await signInWithGoogle();
+      } catch (error) {
+        console.error(error);
+        setMessage("ログインに失敗しました");
+      } finally {
+        loginBtn.disabled = false;
+      }
+    });
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", async function() {
+      logoutBtn.disabled = true;
+      setMessage("");
+      try {
+        await signOutUser();
+      } catch (error) {
+        console.error(error);
+        setMessage("ログアウトに失敗しました");
+      } finally {
+        logoutBtn.disabled = false;
+      }
+    });
+  }
+
+  onUserChanged(async function(user) {
+    setMessage("");
+
+    if (!user) {
+      applyLoggedOutView();
+      return;
+    }
+
+    await applyLoggedInView(user);
+  });
+
+  applyLoggedOutView();
+</script>
+</body>
+</html>
+

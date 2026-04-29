@@ -279,6 +279,31 @@
       line-height: 1.7;
     }
 
+    .settings-volume-block {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .settings-volume-label {
+      margin-bottom: 10px;
+      color: var(--sub);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .settings-volume-slider {
+      width: 100%;
+      cursor: pointer;
+    }
+
+    .settings-volume-value {
+      margin-top: 8px;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
     .bonus-box,
     .daily-bonus-wrap,
     .daily-bonus-result-box {
@@ -334,6 +359,14 @@
       font-weight: 900;
     }
 
+    .game-select-only-actions .seisei-topbar-stats {
+      display: none;
+    }
+
+    .game-select-only-actions .seisei-topbar {
+      justify-content: space-between;
+    }
+
     @media (max-width: 860px) {
       .game-select-list {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -360,6 +393,8 @@
   </style>
 </head>
 <body>
+  <audio id="selectgameBgm" data-audio-type="bgm" src="./audio/bgm/seiseigame.wav" loop playsinline></audio>
+
   <main class="game-select-wrap">
     <div id="gameSelectTopbarMount" class="topbar-mount"></div>
 
@@ -374,10 +409,14 @@
           <div class="game-select-open">OPEN</div>
         </a>
         <a class="game-select-item" href="javascript:void(0)" aria-disabled="true" style="pointer-events:none; opacity:0.55; filter:grayscale(0.2) brightness(0.8);">
+          <div class="game-select-name">マジマージ</div>
+          <div class="game-select-open">COMING SOON</div>
+        </a>
+        <a class="game-select-item" id="medalPusherCard" href="javascript:void(0)" aria-disabled="true" data-admin-only="true" data-admin-href="./メダルプッシャー/index.html" style="pointer-events:none; opacity:0.55; filter:grayscale(0.2) brightness(0.8);">
           <div class="game-select-name">メダルプッシャー</div>
           <div class="game-select-open">COMING SOON</div>
         </a>
-        <a class="game-select-item" href="javascript:void(0)" aria-disabled="true" style="pointer-events:none; opacity:0.55; filter:grayscale(0.2) brightness(0.8);">
+        <a class="game-select-item" id="ochinchiroCard" href="javascript:void(0)" aria-disabled="true" data-admin-only="true" data-admin-href="./おチンチロ/lobby.html" style="pointer-events:none; opacity:0.55; filter:grayscale(0.2) brightness(0.8);">
           <div class="game-select-name">おチンチロ</div>
           <div class="game-select-open">COMING SOON</div>
         </a>
@@ -455,6 +494,46 @@
         <button type="button" class="daily-bonus-card">?</button>
         <button type="button" class="daily-bonus-card">?</button>
         <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
+        <button type="button" class="daily-bonus-card">?</button>
       </div>
     </div>
   </section>
@@ -504,9 +583,12 @@
     const dailyLoginBonusResult = document.getElementById("dailyLoginBonusResult");
     const dailyLoginBonusResultRank = document.getElementById("dailyLoginBonusResultRank");
     const dailyLoginBonusResultCoin = document.getElementById("dailyLoginBonusResultCoin");
+    const adminOnlyCards = Array.from(document.querySelectorAll("[data-admin-only='true']"));
 
     const ADMIN_EMAILS = ["takoponnsama6630@gmail.com"];
     const RENAME_COST_COIN = 100;
+    const SETTINGS_BGM_VOLUME_KEY = "seiseigames_bgm_volume";
+    const SETTINGS_SE_VOLUME_KEY = "seiseigames_se_volume";
 
     let currentUser = null;
     let currentProfile = null;
@@ -516,8 +598,10 @@
     let adminUsers = [];
     let adminSelectedUid = "";
     let settingsOverlay = null;
-    let settingsNicknameInput = null;
-    let settingsMessage = null;
+    let settingsBgmInput = null;
+    let settingsBgmValue = null;
+    let settingsSeInput = null;
+    let settingsSeValue = null;
 
     function sanitizeNickname(value) {
       return String(value || "").trim().replace(/\s+/g, " ").slice(0, 20);
@@ -572,17 +656,88 @@
       dailyLoginBonusResult.classList.add("show");
     }
 
+    function normalizeVolume(value) {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 0.01;
+      return Math.min(1, Math.max(0, num));
+    }
+
+    function getSavedAudioLevel(key) {
+      try {
+        return normalizeVolume(window.localStorage.getItem(key));
+      } catch (error) {
+        return 0.01;
+      }
+    }
+
+    function setSavedAudioLevel(key, value) {
+      const safeValue = normalizeVolume(value);
+      try {
+        window.localStorage.setItem(key, String(safeValue));
+      } catch (error) {
+      }
+      return safeValue;
+    }
+
+    function updateAudioText(target, label, value) {
+      if (!target) return;
+      target.textContent = label + ": " + Math.round(normalizeVolume(value) * 100) + "%";
+    }
+
+    function applyAudioSettingsToPage() {
+      const bgmVolume = getSavedAudioLevel(SETTINGS_BGM_VOLUME_KEY);
+      const seVolume = getSavedAudioLevel(SETTINGS_SE_VOLUME_KEY);
+
+      document.querySelectorAll('audio[data-audio-type="bgm"], video[data-audio-type="bgm"]').forEach(function(media) {
+        media.volume = bgmVolume;
+      });
+
+      document.querySelectorAll('audio[data-audio-type="se"], video[data-audio-type="se"]').forEach(function(media) {
+        media.volume = seVolume;
+      });
+
+      updateAudioText(settingsBgmValue, "BGM", bgmVolume);
+      updateAudioText(settingsSeValue, "SE", seVolume);
+    }
+
+    function startBgm() {
+      const bgm = document.getElementById("selectgameBgm");
+      if (!bgm) return;
+      bgm.volume = getSavedAudioLevel(SETTINGS_BGM_VOLUME_KEY);
+      const playPromise = bgm.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(function() {
+        });
+      }
+    }
+
+    function applyAdminOnlyGameAccess() {
+      adminOnlyCards.forEach(function(card) {
+        if (!card) return;
+        const adminHref = String(card.getAttribute("data-admin-href") || "").trim();
+        if (isAdminUser) {
+          card.setAttribute("href", adminHref || "javascript:void(0)");
+          card.setAttribute("aria-disabled", "false");
+          card.style.pointerEvents = "auto";
+          card.style.opacity = "1";
+          card.style.filter = "none";
+          return;
+        }
+        card.setAttribute("href", "javascript:void(0)");
+        card.setAttribute("aria-disabled", "true");
+        card.style.pointerEvents = "none";
+        card.style.opacity = "0.55";
+        card.style.filter = "grayscale(0.2) brightness(0.8)";
+      });
+    }
+
     function applyTopbarProfiles() {
       const nickname = sanitizeNickname(currentProfile && currentProfile.nickname) || "ニックネーム未設定";
       const coin = Number((currentProfile && currentProfile.coin) || 0);
-      const fragment = Number((currentProfile && currentProfile.avatarFragment) || 0);
       const avatarImage = getProfileAvatarImage(currentProfile);
 
       if (gameSelectTopbar) {
         gameSelectTopbar.setProfile({ nickname: nickname, subText: "ユーザー情報", photoURL: avatarImage });
-        gameSelectTopbar.setStatText("coin", "コイン: " + coin);
-        gameSelectTopbar.setStatText("fragment", "欠片: " + fragment);
-        gameSelectTopbar.setButtonVisible("admin", isAdminUser);
       }
 
       if (adminTopbar) {
@@ -594,17 +749,12 @@
     function ensureTopbars() {
       if (!gameSelectTopbar && gameSelectTopbarMount) {
         gameSelectTopbar = createTopbar({
+          className: "game-select-only-actions",
           profile: { nickname: "---", subText: "ユーザー情報", photoURL: "" },
-          stats: [
-            { id: "coin", text: "コイン: 0" },
-            { id: "fragment", text: "欠片: 0" }
-          ],
           actions: [
-            { id: "settings", label: "⚙", gear: true, position: "left", ariaLabel: "設定", onClick: function() { openSettings(); } },
-            { id: "avatar", label: "アバター選択", onClick: function() { window.location.href = "./avatarselect.html"; } },
-            { id: "gacha", label: "アバターガチャ", onClick: function() { window.location.href = "./avatargacha.html"; } },
-            { id: "home", label: "ホーム", onClick: function() { window.location.href = "./home.html"; } },
-            { id: "admin", label: "管理", hidden: true, onClick: async function() { if (!isAdminUser) return; openAdminScreen(); await loadAdminUsers(); } }
+            { id: "items", label: "持ち物", onClick: function() { window.location.href = "./items.html"; } },
+            { id: "home", label: "ホーム", onClick: function() { window.location.href = "./index.html"; } },
+            { id: "settings", label: "⚙", gear: true, ariaLabel: "設定", onClick: function() { openSettings(); } }
           ]
         });
         gameSelectTopbarMount.appendChild(gameSelectTopbar.element);
@@ -634,17 +784,55 @@
       const title = document.createElement("h3");
       title.textContent = "設定";
 
-      const guide = document.createElement("p");
-      guide.textContent = "名前変更は2回目以降100コイン消費です。";
+            const bgmBlock = document.createElement("div");
+      bgmBlock.className = "settings-volume-block";
 
-      const input = document.createElement("input");
-      input.className = "nickname-input";
-      input.type = "text";
-      input.maxLength = 20;
-      input.placeholder = "ニックネームを入力";
+      const bgmLabel = document.createElement("div");
+      bgmLabel.className = "settings-volume-label";
+      bgmLabel.textContent = "BGM";
 
-      const message = document.createElement("div");
-      message.className = "nickname-error";
+      const bgmInput = document.createElement("input");
+      bgmInput.className = "settings-volume-slider";
+      bgmInput.type = "range";
+      bgmInput.min = "0";
+      bgmInput.max = "100";
+      bgmInput.step = "1";
+
+      const bgmValue = document.createElement("div");
+      bgmValue.className = "settings-volume-value";
+
+      bgmInput.addEventListener("input", function() {
+        const nextValue = normalizeVolume(Number(bgmInput.value) / 100);
+        setSavedAudioLevel(SETTINGS_BGM_VOLUME_KEY, nextValue);
+        applyAudioSettingsToPage();
+      });
+
+      bgmBlock.append(bgmLabel, bgmInput, bgmValue);
+
+      const seBlock = document.createElement("div");
+      seBlock.className = "settings-volume-block";
+
+      const seLabel = document.createElement("div");
+      seLabel.className = "settings-volume-label";
+      seLabel.textContent = "SE";
+
+      const seInput = document.createElement("input");
+      seInput.className = "settings-volume-slider";
+      seInput.type = "range";
+      seInput.min = "0";
+      seInput.max = "100";
+      seInput.step = "1";
+
+      const seValue = document.createElement("div");
+      seValue.className = "settings-volume-value";
+
+      seInput.addEventListener("input", function() {
+        const nextValue = normalizeVolume(Number(seInput.value) / 100);
+        setSavedAudioLevel(SETTINGS_SE_VOLUME_KEY, nextValue);
+        applyAudioSettingsToPage();
+      });
+
+      seBlock.append(seLabel, seInput, seValue);
 
       const actions = document.createElement("div");
       actions.className = "nickname-actions";
@@ -652,45 +840,12 @@
       const closeButton = document.createElement("button");
       closeButton.type = "button";
       closeButton.textContent = "閉じる";
-
-      const saveButton = document.createElement("button");
-      saveButton.type = "button";
-      saveButton.className = "primary";
-      saveButton.textContent = "保存する";
-
       closeButton.addEventListener("click", function() {
         closeSettings();
       });
 
-      saveButton.addEventListener("click", async function() {
-        if (!currentUser) return;
-        const nickname = sanitizeNickname(input.value);
-        const currentName = sanitizeNickname(currentProfile && currentProfile.nickname);
-        if (!nickname) {
-          message.textContent = "名前を入れてください";
-          return;
-        }
-        saveButton.disabled = true;
-        message.textContent = "";
-        try {
-          if (currentName && nickname !== currentName) {
-            const nextCoin = Number((currentProfile && currentProfile.coin) || 0) - RENAME_COST_COIN;
-            currentProfile = await updateUserData({ coin: nextCoin, nickname: nickname }, currentUser);
-          } else {
-            currentProfile = await updateUserData({ nickname: nickname }, currentUser);
-          }
-          applyTopbarProfiles();
-          message.textContent = "保存しました";
-        } catch (error) {
-          console.error(error);
-          message.textContent = error && error.message ? error.message : "保存に失敗しました";
-        } finally {
-          saveButton.disabled = false;
-        }
-      });
-
-      actions.append(closeButton, saveButton);
-      dialog.append(title, guide, input, message, actions);
+      actions.append(closeButton);
+      dialog.append(title, bgmBlock, seBlock, actions);
       overlay.appendChild(dialog);
       overlay.addEventListener("click", function(event) {
         if (event.target === overlay) closeSettings();
@@ -698,15 +853,22 @@
       document.body.appendChild(overlay);
 
       settingsOverlay = overlay;
-      settingsNicknameInput = input;
-      settingsMessage = message;
+      settingsBgmInput = bgmInput;
+      settingsBgmValue = bgmValue;
+      settingsSeInput = seInput;
+      settingsSeValue = seValue;
     }
 
     function openSettings() {
       ensureSettings();
       if (!settingsOverlay) return;
-      if (settingsNicknameInput) settingsNicknameInput.value = sanitizeNickname(currentProfile && currentProfile.nickname);
-      if (settingsMessage) settingsMessage.textContent = "";
+      if (settingsBgmInput) {
+        settingsBgmInput.value = String(Math.round(getSavedAudioLevel(SETTINGS_BGM_VOLUME_KEY) * 100));
+      }
+      if (settingsSeInput) {
+        settingsSeInput.value = String(Math.round(getSavedAudioLevel(SETTINGS_SE_VOLUME_KEY) * 100));
+      }
+      applyAudioSettingsToPage();
       settingsOverlay.classList.add("show");
     }
 
@@ -718,13 +880,13 @@
     async function loadProfile(user) {
       currentProfile = await getUserData(user);
       isAdminUser = Boolean(currentProfile && currentProfile.isAdmin) || isAdminAccount(user);
+      applyAdminOnlyGameAccess();
       applyTopbarProfiles();
       return currentProfile;
     }
 
     async function ensureNicknameBeforeOpen() {
       if (!currentUser) return false;
-      await loadProfile(currentUser);
       const nickname = sanitizeNickname(currentProfile && currentProfile.nickname);
       if (nickname) return true;
       openNicknameModal("");
@@ -732,10 +894,14 @@
     }
 
     async function openWithBonus() {
-      const first = await grantFirstGameSelectLoginBonus(currentUser);
-      if (first && first.userData) currentProfile = first.userData;
-      applyTopbarProfiles();
-      if (first && first.awarded && firstLoginBonusOverlay) firstLoginBonusOverlay.classList.add("show");
+      if (!currentProfile) return;
+
+      if (!currentProfile.firstGameSelectLoginBonusReceived) {
+        const first = await grantFirstGameSelectLoginBonus(currentUser);
+        if (first && first.userData) currentProfile = first.userData;
+        applyTopbarProfiles();
+        if (first && first.awarded && firstLoginBonusOverlay) firstLoginBonusOverlay.classList.add("show");
+      }
 
       const daily = await grantDailyLoginBonus(currentUser);
       if (daily && daily.userData) currentProfile = daily.userData;
@@ -915,20 +1081,35 @@
       });
     }
 
+    applyAudioSettingsToPage();
+    startBgm();
+
+    document.addEventListener("pointerdown", startBgm, { passive: true });
+    document.addEventListener("keydown", startBgm);
+
     ensureTopbars();
 
     onUserChanged(async function(user) {
       if (!user) {
-        window.location.href = "./home.html";
+        window.location.href = "./index.html";
         return;
       }
       currentUser = user;
-      await loadProfile(user);
+      currentProfile = await loadProfile(user);
       const ready = await ensureNicknameBeforeOpen();
-      if (ready) await openWithBonus();
+      if (ready) {
+        await openWithBonus();
+        if (isAdminUser && window.location.hash === "#admin") {
+          openAdminScreen();
+          await loadAdminUsers();
+        }
+      }
     });
   </script>
 </body>
 </html>
+
+
+
 
 

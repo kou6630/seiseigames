@@ -227,6 +227,82 @@ function normalizePosition(value) {
   return "right";
 }
 
+function openHref(href) {
+  const next = String(href || "").trim();
+  if (!next) return;
+  window.location.href = next;
+}
+
+function buildPresetActions(options = {}) {
+  const mode = String(options.mode || "").trim();
+  const onOpenSettings = typeof options.onOpenSettings === "function" ? options.onOpenSettings : null;
+  const itemPageHref = String(options.itemPageHref || "./items.html").trim() || "./items.html";
+  const homeHref = String(options.homeHref || "./index.html").trim() || "./index.html";
+  const avatarSelectHref = String(options.avatarSelectHref || "./avatarselect.html").trim() || "./avatarselect.html";
+  const avatarGachaHref = String(options.avatarGachaHref || "./avatargacha.html").trim() || "./avatargacha.html";
+  const gameSelectHref = String(options.gameSelectHref || "./selectgame.html").trim() || "./selectgame.html";
+  const actions = [];
+
+  if (mode === "game" || mode === "items" || mode === "avatar") {
+    if (mode === "game" || mode === "items") {
+      actions.push({
+        id: "items",
+        label: "持ち物",
+        onClick: function() { openHref(itemPageHref); }
+      });
+    }
+
+    if (mode === "avatar") {
+      actions.push({
+        id: "gacha",
+        label: "アバターガチャ",
+        onClick: function() { openHref(avatarGachaHref); }
+      });
+      actions.push({
+        id: "select",
+        label: "ゲーム選択",
+        onClick: function() { openHref(gameSelectHref); }
+      });
+    }
+
+    actions.push({
+      id: "home",
+      label: "ホーム",
+      onClick: function() { openHref(homeHref); }
+    });
+
+    actions.push({
+      id: "settings",
+      label: "⚙",
+      gear: true,
+      ariaLabel: "設定",
+      onClick: function(event, api) {
+        if (onOpenSettings) onOpenSettings(event, api);
+      }
+    });
+  }
+
+  if (mode === "gacha") {
+    actions.push({
+      id: "avatar",
+      label: "アバター選択",
+      onClick: function() { openHref(avatarSelectHref); }
+    });
+    actions.push({
+      id: "select",
+      label: "ゲーム選択",
+      onClick: function() { openHref(gameSelectHref); }
+    });
+    actions.push({
+      id: "home",
+      label: "ホーム",
+      onClick: function() { openHref(homeHref); }
+    });
+  }
+
+  return actions;
+}
+
 export function createTopbar(options = {}) {
   injectTopbarStyles();
 
@@ -336,3 +412,13 @@ export function createTopbar(options = {}) {
 
   return api;
 }
+
+export function createSeiSeiTopbar(options = {}) {
+  const merged = { ...options };
+  if (!Array.isArray(merged.actions) || !merged.actions.length) {
+    merged.actions = buildPresetActions(options);
+  }
+  return createTopbar(merged);
+}
+
+
