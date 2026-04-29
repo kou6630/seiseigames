@@ -1,352 +1,64 @@
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDpjdhoWn-corTpUMhS4q0bWei5ho8ja-Q",
-  authDomain: "ochinchiro.firebaseapp.com",
-  databaseURL: "https://ochinchiro-default-rtdb.firebaseio.com",
-  projectId: "ochinchiro",
-  storageBucket: "ochinchiro.firebasestorage.app",
-  messagingSenderId: "114346085898",
-  appId: "1:114346085898:web:c43f2def62b858803399f3",
-};
+import { onUserChanged, db, ref, onValue, off, update, remove, get, set } from "../shared/firebase.js";
+import { getUserData, getAvatarImageById, normalizeAvatarId } from "../shared/userDate.js";
+import {
+  evaluateChinchiro,
+  createCpuPlayers,
+  createHumanPlayer,
+  applyRoundResult,
+  rankRoundResults,
+  chooseRandomParent,
+  orderPlayersForRound,
+  createTurnResult,
+  getMaxPlayerRolls,
+  getMaxCpuCount,
+} from "./playlogic.js";
+import {
+  injectEffectStyle,
+  animateDiceDrop,
+  startWaitingDiceSpin,
+  showFlashMessage,
+  showResultPop,
+} from "./effect.js";
+import {
+  createGameScreen,
+  injectUiStyle,
+  setStatus,
+  setRoomWord,
+  setTimer,
+  setRollDisabled,
+  clearDiceLayer,
+  clearWaitingDiceLayer,
+  renderPlayers,
+} from "./ui.js";
 
 const ROOM_WORD_KEY = "ochinchiro_room_word";
-const PLAYER_NAME_KEY = "ochinchiro_player_name";
+const ROOM_ID_KEY = "ochinchiro_room_id";
 const PLAYER_ID_KEY = "ochinchiro_player_id";
-const APP_ID = "ochinchiro";
-
-const style = document.createElement("style");
-style.textContent = `
-  * { box-sizing: border-box; }
-
-  html, body {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    font-family: "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
-    background:
-      radial-gradient(circle at top, rgba(255, 215, 120, 0.14), transparent 32%),
-      linear-gradient(180deg, #12070a 0%, #1f0d12 45%, #0b0507 100%);
-    color: #fff7ef;
-  }
-
-  body {
-    overflow: hidden;
-  }
-
-  .ochi-bg-glow {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    background:
-      radial-gradient(circle at 20% 20%, rgba(255, 170, 90, 0.12), transparent 20%),
-      radial-gradient(circle at 80% 30%, rgba(255, 120, 120, 0.10), transparent 24%),
-      radial-gradient(circle at 50% 85%, rgba(255, 220, 120, 0.08), transparent 28%);
-    filter: blur(10px);
-  }
-
-  .ochi-root {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    align-items: stretch;
-    justify-content: stretch;
-    padding: 24px;
-  }
-
-  .ochi-panel {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    height: 100%;
-    border-radius: 28px;
-    background: rgba(20, 8, 12, 0.78);
-    border: 1px solid rgba(255, 230, 200, 0.12);
-    box-shadow:
-      0 24px 80px rgba(0, 0, 0, 0.45),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(10px);
-    display: grid;
-    grid-template-columns: 380px 1fr;
-    gap: 20px;
-    padding: 20px;
-    overflow: hidden;
-  }
-
-  .ochi-left,
-  .ochi-right {
-    min-height: 0;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 230, 200, 0.08);
-    border-radius: 24px;
-    padding: 20px;
-  }
-
-  .ochi-left {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-  }
-
-  .ochi-right {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .ochi-sub {
-    font-size: 13px;
-    letter-spacing: 0.28em;
-    color: rgba(255, 235, 215, 0.7);
-  }
-
-  .ochi-title {
-    margin: 4px 0 0;
-    font-size: 46px;
-    line-height: 1;
-    letter-spacing: 0.08em;
-    color: #ffe0b2;
-    text-shadow:
-      0 0 18px rgba(255, 185, 110, 0.25),
-      0 6px 24px rgba(0, 0, 0, 0.45);
-  }
-
-  .ochi-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 230, 200, 0.08);
-    border-radius: 18px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .ochi-label {
-    font-size: 12px;
-    color: rgba(255, 233, 211, 0.6);
-    letter-spacing: 0.08em;
-  }
-
-  .ochi-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: #fff7ef;
-    word-break: break-all;
-  }
-
-  .ochi-small {
-    font-size: 14px;
-    color: rgba(255, 233, 211, 0.78);
-  }
-
-  .ochi-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: auto;
-  }
-
-  .ochi-btn {
-    width: 100%;
-    height: 50px;
-    border: 0;
-    border-radius: 16px;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    color: #2c1209;
-    background: linear-gradient(180deg, #ffd28f 0%, #ffb860 100%);
-    box-shadow:
-      0 10px 24px rgba(255, 157, 77, 0.24),
-      inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  }
-
-  .ochi-btn:disabled {
-    cursor: default;
-    filter: grayscale(0.3) brightness(0.85);
-    opacity: 0.7;
-  }
-
-  .ochi-btn-sub {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff3e3;
-    box-shadow: none;
-    border: 1px solid rgba(255, 230, 200, 0.12);
-  }
-
-  .ochi-status {
-    min-height: 22px;
-    font-size: 14px;
-    color: rgba(255, 233, 211, 0.84);
-  }
-
-  .ochi-room-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .ochi-room-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: #ffe0b2;
-  }
-
-  .ochi-room-badge {
-    padding: 8px 12px;
-    border-radius: 999px;
-    background: rgba(255, 210, 143, 0.12);
-    border: 1px solid rgba(255, 210, 143, 0.2);
-    font-size: 13px;
-    color: #ffe0b2;
-    white-space: nowrap;
-  }
-
-  .ochi-player-list {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding-right: 4px;
-  }
-
-  .ochi-player-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 16px;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 230, 200, 0.08);
-  }
-
-  .ochi-player-main {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-  }
-
-  .ochi-player-name {
-    font-size: 18px;
-    font-weight: 700;
-    color: #fff7ef;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .ochi-player-meta {
-    font-size: 13px;
-    color: rgba(255, 233, 211, 0.65);
-  }
-
-  .ochi-you {
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: rgba(255, 184, 96, 0.16);
-    border: 1px solid rgba(255, 184, 96, 0.26);
-    font-size: 12px;
-    color: #ffd28f;
-    white-space: nowrap;
-  }
-
-  .ochi-empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    border-radius: 16px;
-    border: 1px dashed rgba(255, 230, 200, 0.15);
-    color: rgba(255, 233, 211, 0.6);
-    font-size: 15px;
-  }
-
-  @media (max-width: 980px) {
-    .ochi-panel {
-      grid-template-columns: 1fr;
-    }
-
-    .ochi-root {
-      padding: 14px;
-    }
-  }
-`;
-document.head.appendChild(style);
-
-document.body.innerHTML = `
-  <div class="ochi-bg-glow"></div>
-  <div class="ochi-root">
-    <div class="ochi-panel">
-      <section class="ochi-left">
-        <div>
-          <div class="ochi-sub">OCHINCHIRO BEST BODY</div>
-          <h1 class="ochi-title">おチンチロ</h1>
-        </div>
-
-        <div class="ochi-card">
-          <div class="ochi-label">名前</div>
-          <div class="ochi-value" id="myName">-</div>
-        </div>
-
-        <div class="ochi-card">
-          <div class="ochi-label">合言葉</div>
-          <div class="ochi-value" id="roomWord">-</div>
-        </div>
-
-        <div class="ochi-card">
-          <div class="ochi-label">接続状態</div>
-          <div class="ochi-small" id="connectionState">Firebase待機中</div>
-        </div>
-
-        <div class="ochi-actions">
-          <button class="ochi-btn" id="joinBtn">ロビーを作る / 入る</button>
-          <button class="ochi-btn ochi-btn-sub" id="leaveBtn" disabled>ロビーから出る</button>
-          <div class="ochi-status" id="statusText"></div>
-        </div>
-      </section>
-
-      <section class="ochi-right">
-        <div class="ochi-room-head">
-          <div class="ochi-room-title">ロビー</div>
-          <div class="ochi-room-badge" id="roomBadge">未参加</div>
-        </div>
-
-        <div class="ochi-player-list" id="playerList">
-          <div class="ochi-empty">まだ参加者がいません</div>
-        </div>
-      </section>
-    </div>
-  </div>
-`;
-
-const els = {
-  myName: document.getElementById("myName"),
-  roomWord: document.getElementById("roomWord"),
-  connectionState: document.getElementById("connectionState"),
-  joinBtn: document.getElementById("joinBtn"),
-  leaveBtn: document.getElementById("leaveBtn"),
-  statusText: document.getElementById("statusText"),
-  roomBadge: document.getElementById("roomBadge"),
-  playerList: document.getElementById("playerList"),
-};
+const ROUND_TIME_LIMIT = 10;
+const CPU_THINK_MS = 900;
+const RESULT_SHOW_MS = 2200;
 
 const state = {
-  app: null,
-  db: null,
+  initializedUserId: "",
   roomWord: (localStorage.getItem(ROOM_WORD_KEY) || "").trim(),
-  playerName: (localStorage.getItem(PLAYER_NAME_KEY) || "").trim(),
-  playerId: getOrCreatePlayerId(),
-  roomId: "",
+  roomId: (localStorage.getItem(ROOM_ID_KEY) || "").trim(),
+  myPlayerId: getOrCreatePlayerId(),
+  currentUser: null,
+  myProfile: null,
+  screenMode: "room",
+  roomData: null,
   roomRef: null,
-  playersRef: null,
-  myPlayerRef: null,
-  unsubscribePlayers: null,
-  joined: false,
+  roomListener: null,
+  currentPlayers: [],
+  gameEls: null,
+  roundActive: false,
+  secondsLeft: ROUND_TIME_LIMIT,
+  timerId: null,
+  cpuTimerId: null,
+  finishingRound: false,
+  waitingDiceSpin: null,
+  waitingDicePlayerId: "",
+  activeTurnKey: "",
 };
 
 function getOrCreatePlayerId() {
@@ -357,16 +69,41 @@ function getOrCreatePlayerId() {
   return created;
 }
 
-function setStatus(text) {
-  els.statusText.textContent = text || "";
+function getDisplayName(profile, user) {
+  const nickname = String((profile && profile.nickname) || "").trim();
+  if (nickname) return nickname;
+  const name = String((profile && profile.name) || "").trim();
+  if (name) return name;
+  return String((user && user.displayName) || "参加者").trim() || "参加者";
 }
 
-function setConnection(text) {
-  els.connectionState.textContent = text;
+function getAvatarUrl(profile) {
+  const selectedAvatar = normalizeAvatarId(profile && profile.selectedAvatar ? profile.selectedAvatar : "");
+  return String(getAvatarImageById(selectedAvatar) || "").trim();
 }
 
-function normalizeRoomWord(value) {
-  return value.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9_-ぁ-んァ-ヶ一-龠ー]/g, "");
+function getCoin(profile) {
+  const value = Number(profile && profile.coin);
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function getRoomElements() {
+  return {
+    roomWord: document.getElementById("roomWord"),
+    roomPlayerList: document.getElementById("roomPlayerList"),
+    cpuCountText: document.getElementById("cpuCountText"),
+    addCpuBtn: document.getElementById("addCpuBtn"),
+    startGameBtn: document.getElementById("startGameBtn"),
+    leaveRoomBtn: document.getElementById("leaveRoomBtn"),
+    roomStatusText: document.getElementById("roomStatusText"),
+  };
+}
+
+function setRoomStatus(text) {
+  const els = getRoomElements();
+  if (els.roomStatusText) {
+    els.roomStatusText.textContent = String(text || "");
+  }
 }
 
 function escapeHtml(value) {
@@ -374,171 +111,653 @@ function escapeHtml(value) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
 
-function renderBaseInfo() {
-  els.myName.textContent = state.playerName || "未入力";
-  els.roomWord.textContent = state.roomWord || "未入力";
-  els.roomBadge.textContent = state.joined ? `参加中: ${state.roomId}` : "未参加";
-  els.leaveBtn.disabled = !state.joined;
-  els.joinBtn.disabled = state.joined;
+function buildHumanPlayers(rawPlayers = {}) {
+  return Object.values(rawPlayers || {})
+    .filter((player) => player && !player.isCpu)
+    .map((player, index) => createHumanPlayer({
+      id: String(player.playerId || player.id || `player_${index + 1}`),
+      name: String(player.name || "参加者").trim() || "参加者",
+      avatarUrl: String(player.avatarUrl || "").trim(),
+      coin: Number(player.coin || 0),
+      joinedAt: Number(player.joinedAt || Date.now()),
+    }, index + 1))
+    .sort((a, b) => Number(a.joinedAt || 0) - Number(b.joinedAt || 0));
 }
 
-function renderPlayers(playersMap = {}) {
-  const players = Object.entries(playersMap)
-    .map(([id, value]) => ({ id, ...value }))
-    .sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+function buildCurrentPlayers(roomData) {
+  const humans = buildHumanPlayers(roomData && roomData.players ? roomData.players : {});
+  const cpus = createCpuPlayers(Number((roomData && roomData.cpuCount) || 0), humans.length + 1, humans.length || 1);
+  const all = [...humans, ...cpus];
+  const parentId = String((roomData && roomData.parentPlayerId) || "");
+
+  return all.map((player, index) => ({
+    ...player,
+    order: index + 1,
+    isParent: parentId ? player.id === parentId : false,
+    finalHandName: "未確定",
+  }));
+}
+
+function renderRoomPlayers(roomData) {
+  const els = getRoomElements();
+  if (!els.roomPlayerList) return;
+
+  const players = buildCurrentPlayers(roomData);
+  state.currentPlayers = players;
 
   if (!players.length) {
-    els.playerList.innerHTML = '<div class="ochi-empty">まだ参加者がいません</div>';
+    els.roomPlayerList.innerHTML = '<div class="room-empty">まだ参加者がいません</div>';
     return;
   }
 
-  els.playerList.innerHTML = players.map((player) => {
-    const isMe = player.id === state.playerId;
+  els.roomPlayerList.innerHTML = players.map((player) => {
+    const isMe = player.id === state.myPlayerId;
+    const isMaster = String((roomData && roomData.masterPlayerId) || "") === player.id;
+    const avatar = player.avatarUrl
+      ? `<div class="room-player-avatar"><img src="${escapeHtml(player.avatarUrl)}" alt="${escapeHtml(player.name || "avatar")}"></div>`
+      : '<div class="room-player-avatar-empty">CPU</div>';
+    const badges = [
+      isMe ? '<span class="room-player-badge">あなた</span>' : "",
+      isMaster ? '<span class="room-player-badge">主</span>' : "",
+      player.isParent ? '<span class="room-player-badge">親</span>' : "",
+      player.isCpu ? '<span class="room-player-badge">CPU</span>' : "",
+    ].join("");
+
     return `
-      <div class="ochi-player-item">
-        <div class="ochi-player-main">
-          <div class="ochi-player-name">${escapeHtml(player.name || "名前なし")}</div>
-          <div class="ochi-player-meta">入室順 ${escapeHtml(String(player.order ?? "-"))}</div>
+      <div class="room-player-item">
+        ${avatar}
+        <div class="room-player-main">
+          <div class="room-player-topline">
+            <div class="room-player-name">${escapeHtml(player.name || "参加者")}</div>
+            ${badges}
+          </div>
+          <div class="room-player-meta">コイン ${escapeHtml(String(player.coin || 0))} 枚</div>
         </div>
-        ${isMe ? '<div class="ochi-you">あなた</div>' : ""}
+        <div class="room-player-right">${player.isCpu ? "CPU" : "参加中"}</div>
       </div>
     `;
   }).join("");
 }
 
-async function initFirebase() {
-  if (!window.firebase) {
-    throw new Error("firebase本体が読み込まれていません");
+function updateRoomControls(roomData) {
+  const els = getRoomElements();
+  const humanCount = buildHumanPlayers(roomData && roomData.players ? roomData.players : {}).length;
+  const cpuCount = Number((roomData && roomData.cpuCount) || 0);
+  const maxCpuCount = getMaxCpuCount(humanCount || 1);
+  const isMaster = String((roomData && roomData.masterPlayerId) || "") === state.myPlayerId;
+  const isPlaying = String((roomData && roomData.status) || "waiting") === "playing";
+
+  if (els.roomWord) {
+    els.roomWord.textContent = state.roomWord || "-";
+  }
+  if (els.cpuCountText) {
+    els.cpuCountText.textContent = String(cpuCount);
+  }
+  if (els.addCpuBtn) {
+    els.addCpuBtn.disabled = !isMaster || isPlaying || cpuCount >= maxCpuCount;
+  }
+  if (els.startGameBtn) {
+    els.startGameBtn.disabled = !isMaster || isPlaying || (humanCount + cpuCount) <= 0;
   }
 
-  if (!firebase.apps.length) {
-    firebase.initializeApp(FIREBASE_CONFIG);
+  if (isPlaying) {
+    setRoomStatus("ルームマスターが開始しました。");
+    return;
   }
 
-  state.app = firebase.app();
-  state.db = firebase.database();
+  if (!isMaster) {
+    setRoomStatus("待機中です。ルームマスターの開始を待っています。");
+    return;
+  }
+
+  if (cpuCount >= maxCpuCount) {
+    setRoomStatus("これ以上CPUは追加できません。");
+    return;
+  }
+
+  setRoomStatus("待機中です。CPU追加か開始ができます。");
 }
 
-async function joinLobby() {
-  if (!state.playerName) {
-    setStatus("先にホームで名前を入れてください。");
+function stopTimer() {
+  if (state.timerId) {
+    window.clearInterval(state.timerId);
+    state.timerId = null;
+  }
+}
+
+function clearCpuAutoTurn() {
+  if (state.cpuTimerId) {
+    window.clearTimeout(state.cpuTimerId);
+    state.cpuTimerId = null;
+  }
+}
+
+function startTimer() {
+  stopTimer();
+  state.secondsLeft = ROUND_TIME_LIMIT;
+  if (state.gameEls) {
+    setTimer(state.gameEls, state.secondsLeft);
+  }
+
+  state.timerId = window.setInterval(() => {
+    state.secondsLeft -= 1;
+    if (state.gameEls) {
+      setTimer(state.gameEls, Math.max(0, state.secondsLeft));
+    }
+
+    if (state.secondsLeft > 0) return;
+
+    stopTimer();
+    if (!state.roundActive || !state.roomRef || !state.roomData) return;
+    if (!isMyTurn(state.roomData)) return;
+    forceTimeoutRoll();
+  }, 1000);
+}
+
+function stopRoundLocally() {
+  state.roundActive = false;
+  state.activeTurnKey = "";
+  stopWaitingDiceSpin();
+  stopTimer();
+  clearCpuAutoTurn();
+  if (state.gameEls) {
+    setRollDisabled(state.gameEls, true);
+  }
+}
+
+function stopWaitingDiceSpin() {
+  if (state.waitingDiceSpin && typeof state.waitingDiceSpin.stop === "function") {
+    state.waitingDiceSpin.stop();
+  }
+  state.waitingDiceSpin = null;
+  state.waitingDicePlayerId = "";
+  if (state.gameEls) {
+    clearWaitingDiceLayer(state.gameEls);
+  }
+}
+
+async function ensureWaitingDiceSpin(roomData = state.roomData) {
+  if (!state.gameEls || !roomData || !state.roundActive) return;
+  const currentTurnPlayer = getCurrentTurnPlayer(roomData);
+  const playerId = currentTurnPlayer ? String(currentTurnPlayer.id || "") : "";
+  if (!playerId) {
+    stopWaitingDiceSpin();
+    return;
+  }
+  const spinKey = `${playerId}:${getPlayerRollCount(roomData, playerId)}`;
+  if (state.waitingDiceSpin && state.waitingDicePlayerId === spinKey) return;
+  stopWaitingDiceSpin();
+  state.waitingDicePlayerId = spinKey;
+  state.waitingDiceSpin = await startWaitingDiceSpin(state.gameEls.waitingDiceLayer, 3);
+}
+
+function isMaster(roomData = state.roomData) {
+  return String((roomData && roomData.masterPlayerId) || "") === state.myPlayerId;
+}
+
+function getOrderedPlayers(roomData = state.roomData) {
+  const currentPlayers = buildCurrentPlayers(roomData);
+  return orderPlayersForRound(currentPlayers);
+}
+
+function getCurrentTurnPlayer(roomData = state.roomData) {
+  const ordered = getOrderedPlayers(roomData);
+  const index = Math.max(0, Number((roomData && roomData.currentTurnIndex) || 0));
+  return ordered[index] || null;
+}
+
+function isMyTurn(roomData = state.roomData) {
+  const player = getCurrentTurnPlayer(roomData);
+  return Boolean(player && !player.isCpu && player.id === state.myPlayerId);
+}
+
+function getResultMap(roomData = state.roomData) {
+  return roomData && roomData.roundResults && typeof roomData.roundResults === "object" ? roomData.roundResults : {};
+}
+
+function getPlayerResultEntry(roomData, playerId) {
+  const results = getResultMap(roomData);
+  const entry = results[String(playerId || "")];
+  return entry && typeof entry === "object" ? entry : null;
+}
+
+function getPlayerRolls(roomData, playerId) {
+  const entry = getPlayerResultEntry(roomData, playerId);
+  return entry && Array.isArray(entry.rolls) ? entry.rolls : [];
+}
+
+function getPlayerRollCount(roomData, playerId) {
+  return getPlayerRolls(roomData, playerId).length;
+}
+
+function isPlayerFinished(roomData, playerId) {
+  const entry = getPlayerResultEntry(roomData, playerId);
+  return Boolean(entry && entry.finalResult);
+}
+
+function buildTurnKey(roomData) {
+  const currentTurnPlayer = getCurrentTurnPlayer(roomData);
+  if (!currentTurnPlayer) return "";
+  return `${currentTurnPlayer.id}:${getPlayerRollCount(roomData, currentTurnPlayer.id)}`;
+}
+
+function resolveRoundResultFromAnimation(animationResult) {
+  if (!animationResult || typeof animationResult !== "object") {
+    return null;
+  }
+
+  if (Array.isArray(animationResult.dice) && animationResult.dice.length === 3) {
+    return evaluateChinchiro(animationResult.dice);
+  }
+
+  if (Array.isArray(animationResult.values) && animationResult.values.length === 3) {
+    return evaluateChinchiro(animationResult.values);
+  }
+
+  return null;
+}
+
+function applyGameView(roomData) {
+  if (!roomData) return;
+  if (state.screenMode !== "game") {
+    injectUiStyle();
+    injectEffectStyle();
+    state.gameEls = createGameScreen();
+    state.screenMode = "game";
+    state.gameEls.rollBtn.addEventListener("click", handleRollButton);
+    state.gameEls.backBtn.addEventListener("click", handleBack);
+  }
+
+  const isPlaying = String(roomData.status || "") === "playing";
+  if (!state.roundActive && isPlaying) {
+    state.roundActive = true;
+  }
+
+  const orderedPlayers = getOrderedPlayers(roomData);
+  const resultMap = getResultMap(roomData);
+  const playersWithResults = applyRoundResult(orderedPlayers, resultMap);
+  state.currentPlayers = playersWithResults;
+  state.roomData = roomData;
+
+  setRoomWord(state.gameEls, state.roomWord);
+  renderPlayers(state.gameEls, playersWithResults, state.myPlayerId);
+
+  const currentTurnPlayer = getCurrentTurnPlayer(roomData);
+  if (currentTurnPlayer) {
+    const nextRollNumber = getPlayerRollCount(roomData, currentTurnPlayer.id) + 1;
+    setStatus(state.gameEls, `${currentTurnPlayer.name} の${nextRollNumber}回目です。`);
+  } else {
+    setStatus(state.gameEls, "結果を集計しています。");
+  }
+
+  const turnKey = buildTurnKey(roomData);
+  if (turnKey && state.activeTurnKey !== turnKey) {
+    state.activeTurnKey = turnKey;
+    startTimer();
+  }
+
+  const canRoll = isMyTurn(roomData) && state.roundActive;
+  setRollDisabled(state.gameEls, !canRoll);
+
+  ensureWaitingDiceSpin(roomData);
+  scheduleCpuTurn(roomData);
+  maybeFinishRound(roomData);
+}
+
+function updateResultsOnScreen(roomData) {
+  if (state.screenMode !== "game" || !state.gameEls) return;
+  const orderedPlayers = getOrderedPlayers(roomData);
+  const playersWithResults = applyRoundResult(orderedPlayers, getResultMap(roomData));
+  state.currentPlayers = playersWithResults;
+  renderPlayers(state.gameEls, playersWithResults, state.myPlayerId);
+}
+
+function renderRoomView(roomData) {
+  state.screenMode = "room";
+  state.roomData = roomData;
+  renderRoomPlayers(roomData);
+  updateRoomControls(roomData);
+}
+
+async function rebuildRoomIfNeeded() {
+  if (!state.roomRef) return;
+  const snapshot = await get(state.roomRef);
+  const roomData = snapshot.exists() ? (snapshot.val() || {}) : {};
+  const humanPlayers = buildHumanPlayers(roomData.players || {});
+  const myJoinedAt = Date.now();
+  const shouldRebuild = !roomData.roomId || humanPlayers.length === 0;
+
+  const nextBase = shouldRebuild
+    ? {
+        roomId: state.roomId,
+        roomWord: state.roomWord,
+        status: "waiting",
+        masterPlayerId: state.myPlayerId,
+        cpuCount: 0,
+        currentTurnIndex: 0,
+        parentPlayerId: "",
+        turnOrder: [],
+        roundResults: {},
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+    : {
+        roomId: state.roomId,
+        roomWord: state.roomWord,
+        updatedAt: Date.now(),
+      };
+
+  await update(state.roomRef, nextBase);
+  await update(ref(db, `ochinchiroRooms/${state.roomId}/players/${state.myPlayerId}`), {
+    playerId: state.myPlayerId,
+    uid: String((state.currentUser && state.currentUser.uid) || ""),
+    name: getDisplayName(state.myProfile, state.currentUser),
+    avatarUrl: getAvatarUrl(state.myProfile),
+    coin: getCoin(state.myProfile),
+    isCpu: false,
+    joinedAt: shouldRebuild ? myJoinedAt : (roomData.players && roomData.players[state.myPlayerId] && roomData.players[state.myPlayerId].joinedAt) || myJoinedAt,
+    updatedAt: Date.now(),
+  });
+}
+
+async function addCpu() {
+  if (!state.roomData || !isMaster()) return;
+  const humanCount = buildHumanPlayers(state.roomData.players || {}).length;
+  const cpuCount = Number(state.roomData.cpuCount || 0);
+  const maxCpuCount = getMaxCpuCount(humanCount || 1);
+  if (cpuCount >= maxCpuCount) return;
+
+  await update(state.roomRef, {
+    cpuCount: cpuCount + 1,
+    updatedAt: Date.now(),
+  });
+}
+
+async function startGameFromRoom() {
+  if (!state.roomData || !isMaster()) return;
+
+  const players = buildCurrentPlayers(state.roomData);
+  if (!players.length) return;
+
+  const chosen = chooseRandomParent(players);
+  const ordered = orderPlayersForRound(chosen.players);
+
+  await update(state.roomRef, {
+    status: "playing",
+    parentPlayerId: chosen.parentId,
+    turnOrder: ordered.map((player) => player.id),
+    currentTurnIndex: 0,
+    roundResults: {},
+    updatedAt: Date.now(),
+  });
+}
+
+async function advanceTurn(result) {
+  if (!state.roomRef || !state.roomData) return;
+  const roomData = state.roomData;
+  const ordered = getOrderedPlayers(roomData);
+  const currentIndex = Math.max(0, Number(roomData.currentTurnIndex || 0));
+  const currentPlayer = ordered[currentIndex];
+  if (!currentPlayer) return;
+
+  const previousRolls = getPlayerRolls(roomData, currentPlayer.id);
+  const nextTurn = previousRolls.length + 1;
+  const turnResult = createTurnResult(result && result.dice ? result.dice : [], nextTurn, getMaxPlayerRolls());
+  const nextRolls = [...previousRolls, turnResult];
+  const nextEntry = {
+    rolls: nextRolls,
+    rollCount: nextRolls.length,
+    currentResult: turnResult,
+    finalResult: turnResult.finished ? turnResult : null,
+  };
+
+  const nextResults = {
+    ...getResultMap(roomData),
+    [currentPlayer.id]: nextEntry,
+  };
+
+  await update(state.roomRef, {
+    roundResults: nextResults,
+    currentTurnIndex: turnResult.finished ? currentIndex + 1 : currentIndex,
+    updatedAt: Date.now(),
+  });
+}
+
+async function handleRollButton() {
+  if (!state.roundActive || !state.gameEls || !isMyTurn()) return;
+
+  setRollDisabled(state.gameEls, true);
+  stopTimer();
+  clearDiceLayer(state.gameEls);
+  const initialQuaternions = state.waitingDiceSpin && typeof state.waitingDiceSpin.getQuaternions === "function"
+    ? state.waitingDiceSpin.getQuaternions()
+    : [];
+  stopWaitingDiceSpin();
+  setStatus(state.gameEls, "お椀にサイコロを落としています。");
+
+  try {
+    const animationResult = await animateDiceDrop(state.gameEls.diceLayer, [], { duration: 2800, initialQuaternions });
+    const result = resolveRoundResultFromAnimation(animationResult);
+
+    if (!result) {
+      throw new Error("サイコロ結果の取得に失敗しました");
+    }
+
+    const currentPlayer = getCurrentTurnPlayer(state.roomData);
+    const nextTurn = getPlayerRollCount(state.roomData, currentPlayer.id) + 1;
+    const turnResult = createTurnResult(result.dice, nextTurn, getMaxPlayerRolls());
+    setStatus(state.gameEls, turnResult.finished ? `${turnResult.handName} で確定です。` : `${turnResult.handName} です。もう一度振れます。`);
+    await advanceTurn(result);
+  } catch (error) {
+    console.error(error);
+    setStatus(state.gameEls, "振る処理に失敗しました。");
+  }
+}
+
+async function forceTimeoutRoll() {
+  if (!state.roundActive || !isMyTurn() || !state.gameEls) return;
+
+  clearDiceLayer(state.gameEls);
+  const initialQuaternions = state.waitingDiceSpin && typeof state.waitingDiceSpin.getQuaternions === "function"
+    ? state.waitingDiceSpin.getQuaternions()
+    : [];
+  stopWaitingDiceSpin();
+
+  try {
+    const animationResult = await animateDiceDrop(state.gameEls.diceLayer, [], { duration: 2200, initialQuaternions });
+    const result = resolveRoundResultFromAnimation(animationResult);
+
+    if (!result) {
+      throw new Error("サイコロ結果の取得に失敗しました");
+    }
+
+    const currentPlayer = getCurrentTurnPlayer(state.roomData);
+    const nextTurn = getPlayerRollCount(state.roomData, currentPlayer.id) + 1;
+    const turnResult = createTurnResult(result.dice, nextTurn, getMaxPlayerRolls());
+    showResultPop("時間切れ");
+    setStatus(state.gameEls, turnResult.finished ? `${turnResult.handName} で確定です。` : `${turnResult.handName} です。もう一度振れます。`);
+    await advanceTurn(result);
+  } catch (error) {
+    console.error(error);
+    setStatus(state.gameEls, "時間切れ処理に失敗しました。");
+  }
+}
+
+function scheduleCpuTurn(roomData) {
+  clearCpuAutoTurn();
+  if (!state.roundActive || !roomData || !isMaster(roomData)) return;
+
+  const currentTurnPlayer = getCurrentTurnPlayer(roomData);
+  if (!currentTurnPlayer || !currentTurnPlayer.isCpu) return;
+
+  state.cpuTimerId = window.setTimeout(async () => {
+    try {
+      if (!state.roomData || String(state.roomData.status || "") !== "playing" || !state.gameEls) return;
+      clearDiceLayer(state.gameEls);
+      const initialQuaternions = state.waitingDiceSpin && typeof state.waitingDiceSpin.getQuaternions === "function"
+        ? state.waitingDiceSpin.getQuaternions()
+        : [];
+      stopWaitingDiceSpin();
+      const animationResult = await animateDiceDrop(state.gameEls.diceLayer, [], { duration: 2200, initialQuaternions });
+      const result = resolveRoundResultFromAnimation(animationResult);
+      if (!result) {
+        throw new Error("CPUサイコロ結果の取得に失敗しました");
+      }
+      const nextTurn = getPlayerRollCount(state.roomData, currentTurnPlayer.id) + 1;
+      const turnResult = createTurnResult(result.dice, nextTurn, getMaxPlayerRolls());
+      setStatus(state.gameEls, turnResult.finished ? `${currentTurnPlayer.name} は ${turnResult.handName} で確定です。` : `${currentTurnPlayer.name} は ${turnResult.handName} です。もう一度振ります。`);
+      await advanceTurn(result);
+    } catch (error) {
+      console.error(error);
+    }
+  }, CPU_THINK_MS);
+}
+
+function maybeFinishRound(roomData) {
+  if (!roomData || state.finishingRound) return;
+  const ordered = getOrderedPlayers(roomData);
+  const results = getResultMap(roomData);
+  if (!ordered.length || ordered.some((player) => !isPlayerFinished(roomData, player.id))) return;
+
+  state.finishingRound = true;
+  stopTimer();
+  clearCpuAutoTurn();
+  updateResultsOnScreen(roomData);
+
+  const ranking = rankRoundResults(results);
+  if (!ranking.winnerIds.length) {
+    setStatus(state.gameEls, "結果を出せませんでした。");
+  } else if (ranking.winnerIds.length > 1) {
+    setStatus(state.gameEls, "引き分けです。");
+    showResultPop("引き分け");
+  } else {
+    const winnerId = ranking.winnerIds[0];
+    const winner = ordered.find((player) => player.id === winnerId);
+    const winnerName = winner ? winner.name : "勝者";
+    setStatus(state.gameEls, `${winnerName} の勝ちです。`);
+    showFlashMessage(`${winnerName} の勝ち`);
+  }
+
+  if (!isMaster(roomData)) {
+    window.setTimeout(() => {
+      state.finishingRound = false;
+    }, RESULT_SHOW_MS);
     return;
   }
 
-  if (!state.roomWord) {
-    setStatus("先にホームで合言葉を入れてください。");
+  window.setTimeout(async () => {
+    try {
+      await update(state.roomRef, {
+        status: "waiting",
+        parentPlayerId: "",
+        currentTurnIndex: 0,
+        turnOrder: [],
+        roundResults: {},
+        updatedAt: Date.now(),
+      });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      state.finishingRound = false;
+    }
+  }, RESULT_SHOW_MS);
+}
+
+function detachRoomListener() {
+  if (state.roomRef && state.roomListener) {
+    off(state.roomRef, "value", state.roomListener);
+  }
+  state.roomListener = null;
+}
+
+async function leaveRoom() {
+  detachRoomListener();
+  stopRoundLocally();
+
+  if (!state.roomId) return;
+
+  try {
+    await remove(ref(db, `ochinchiroRooms/${state.roomId}/players/${state.myPlayerId}`));
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function handleBack() {
+  await leaveRoom();
+  window.location.href = "./lobby.html";
+}
+
+function bindRoomButtons() {
+  const els = getRoomElements();
+  if (els.addCpuBtn) {
+    els.addCpuBtn.addEventListener("click", addCpu);
+  }
+  if (els.startGameBtn) {
+    els.startGameBtn.addEventListener("click", startGameFromRoom);
+  }
+  if (els.leaveRoomBtn) {
+    els.leaveRoomBtn.addEventListener("click", handleBack);
+  }
+}
+
+async function initialize(user) {
+  if (state.initializedUserId === String(user.uid || "")) {
     return;
   }
 
-  state.roomId = normalizeRoomWord(state.roomWord);
-  if (!state.roomId) {
-    setStatus("使える合言葉がありません。");
+  state.initializedUserId = String(user.uid || "");
+  state.currentUser = user;
+  state.myProfile = await getUserData(user);
+  state.roomId = (localStorage.getItem(ROOM_ID_KEY) || "").trim();
+  state.roomWord = (localStorage.getItem(ROOM_WORD_KEY) || "").trim();
+
+  if (!state.roomId || !state.roomWord) {
+    window.location.href = "./lobby.html";
+    return;
+  }
+
+  bindRoomButtons();
+  state.roomRef = ref(db, `ochinchiroRooms/${state.roomId}`);
+  await rebuildRoomIfNeeded();
+
+  state.roomListener = (snapshot) => {
+    const roomData = snapshot && snapshot.exists && snapshot.exists() ? (snapshot.val() || {}) : {};
+    state.roomData = roomData;
+
+    if (String(roomData.status || "waiting") === "playing") {
+      applyGameView(roomData);
+      return;
+    }
+
+    stopRoundLocally();
+    if (state.screenMode === "game") {
+      window.location.reload();
+      return;
+    }
+    renderRoomView(roomData);
+  };
+
+  onValue(state.roomRef, state.roomListener);
+  window.addEventListener("beforeunload", leaveRoom);
+}
+
+onUserChanged(async (user) => {
+  if (!user) {
+    window.location.href = "../index.html";
     return;
   }
 
   try {
-    setStatus("ロビー参加中...");
-    setConnection("Firebase接続中");
-
-    const roomBaseRef = state.db.ref(`apps/${APP_ID}/lobbies/${state.roomId}`);
-    const metaRef = roomBaseRef.child("meta");
-    const playersRef = roomBaseRef.child("players");
-    const myPlayerRef = playersRef.child(state.playerId);
-
-    const joinedAt = Date.now();
-    const snapshot = await playersRef.once("value");
-    const players = snapshot.val() || {};
-    const order = Object.keys(players).length + 1;
-
-    await metaRef.update({
-      roomWord: state.roomWord,
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
-      createdAt: players && Object.keys(players).length ? undefined : firebase.database.ServerValue.TIMESTAMP,
-    });
-
-    await myPlayerRef.set({
-      id: state.playerId,
-      name: state.playerName,
-      joinedAt,
-      order,
-    });
-
-    myPlayerRef.onDisconnect().remove();
-    roomBaseRef.child("meta/updatedAt").onDisconnect().set(firebase.database.ServerValue.TIMESTAMP);
-
-    if (state.unsubscribePlayers) {
-      state.playersRef.off("value", state.unsubscribePlayers);
-    }
-
-    const handlePlayers = (snap) => {
-      renderPlayers(snap.val() || {});
-    };
-
-    playersRef.on("value", handlePlayers);
-
-    state.playersRef = playersRef;
-    state.myPlayerRef = myPlayerRef;
-    state.unsubscribePlayers = handlePlayers;
-    state.joined = true;
-
-    renderBaseInfo();
-    setConnection("Firebase接続済み");
-    setStatus("ロビーに入りました。");
+    await initialize(user);
   } catch (error) {
     console.error(error);
-    setConnection("Firebaseエラー");
-    setStatus(`参加失敗: ${error.message}`);
-  }
-}
-
-async function leaveLobby() {
-  try {
-    if (state.playersRef && state.unsubscribePlayers) {
-      state.playersRef.off("value", state.unsubscribePlayers);
-    }
-
-    if (state.myPlayerRef) {
-      await state.myPlayerRef.remove();
-    }
-
-    state.playersRef = null;
-    state.myPlayerRef = null;
-    state.unsubscribePlayers = null;
-    state.joined = false;
-    renderPlayers({});
-    renderBaseInfo();
-    setStatus("ロビーから出ました。");
-  } catch (error) {
-    console.error(error);
-    setStatus(`退出失敗: ${error.message}`);
-  }
-}
-
-async function boot() {
-  renderBaseInfo();
-  renderPlayers({});
-
-  try {
-    await initFirebase();
-    setConnection("Firebase準備完了");
-    setStatus("ロビーを作る / 入る を押してください。");
-  } catch (error) {
-    console.error(error);
-    setConnection("Firebase未接続");
-    setStatus("Firebase設定が未完了です。configとSDK読込を入れてください。");
-  }
-}
-
-els.joinBtn.addEventListener("click", joinLobby);
-els.leaveBtn.addEventListener("click", leaveLobby);
-window.addEventListener("beforeunload", () => {
-  if (state.myPlayerRef) {
-    state.myPlayerRef.onDisconnect().remove();
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100vw;height:100vh;color:#fff7ef;background:#12070a;">ゲーム画面の準備に失敗しました。</div>';
   }
 });
 
-boot();
+

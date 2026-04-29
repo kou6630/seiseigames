@@ -6,6 +6,10 @@ const HAND_NAMES = {
   MENASHI: "目なし",
 };
 
+const CPU_NAMES = ["CPU 1", "CPU 2", "CPU 3", "CPU 4", "CPU 5"];
+const MAX_TOTAL_PLAYERS = 6;
+const MAX_PLAYER_ROLLS = 3;
+
 export function rollSingleDie() {
   return Math.floor(Math.random() * 6) + 1;
 }
@@ -71,7 +75,6 @@ export function evaluateChinchiro(dice = []) {
   }
 
   if (faces.length === 2) {
-    const pairFace = entries.find((item) => item.count === 2)?.face || 0;
     const singleFace = entries.find((item) => item.count === 1)?.face || 0;
     return buildResult(
       sorted,
@@ -130,43 +133,212 @@ export function getBestOfRolls(rolls = []) {
   }, null);
 }
 
-export function createTurnResult(dice = [], turn = 1, maxTurn = 3) {
+export function createTurnResult(dice = [], turn = 1, maxTurn = MAX_PLAYER_ROLLS) {
+  const safeTurn = Math.max(1, Math.min(Number(turn || 1), Number(maxTurn || MAX_PLAYER_ROLLS)));
+  const safeMaxTurn = Math.max(1, Number(maxTurn || MAX_PLAYER_ROLLS));
   const result = evaluateChinchiro(dice);
   return {
-    turn,
-    maxTurn,
+    turn: safeTurn,
+    maxTurn: safeMaxTurn,
     dice: result.dice,
     hand: result.hand,
     handName: result.handName,
     rank: result.rank,
-    retry: result.retry && turn < maxTurn,
-    finished: !result.retry || turn >= maxTurn,
+    retry: result.retry && safeTurn < safeMaxTurn,
+    finished: !result.retry || safeTurn >= safeMaxTurn,
     strengthText: result.strengthText,
     payoutRate: result.payoutRate,
     score: result.score,
   };
 }
 
-export function createCpuDecision(history = [], maxTurn = 3) {
-  const turn = Array.isArray(history) ? history.length + 1 : 1;
-  const last = Array.isArray(history) && history.length ? history[history.length - 1] : null;
+export function createPlayerRollState(history = [], maxTurn = MAX_PLAYER_ROLLS) {
+  const rolls = Array.isArray(history) ? history : [];
+  const safeMaxTurn = Math.max(1, Number(maxTurn || MAX_PLAYER_ROLLS));
+  const last = rolls.length ? rolls[rolls.length - 1] : null;
+  const finalResult = last && last.finished ? last : null;
+
+  return {
+    rolls,
+    rollCount: rolls.length,
+    maxTurn: safeMaxTurn,
+    currentResult: last,
+    finalResult,
+    finished: Boolean(finalResult),
+    canRoll: !finalResult && rolls.length < safeMaxTurn,
+  };
+}
+
+export function createCpuDecision(history = [], maxTurn = MAX_PLAYER_ROLLS) {
+  const state = createPlayerRollState(history, maxTurn);
+  const turn = state.rollCount + 1;
+  const last = state.currentResult;
 
   if (!last) {
-    return { shouldRoll: true, reason: "初回" };
+    return { shouldRoll: true, reason: "初回", turn };
   }
 
-  if (!last.retry) {
-    return { shouldRoll: false, reason: "役確定" };
+  if (state.finished) {
+    return { shouldRoll: false, reason: "役確定", turn };
   }
 
-  if (turn > maxTurn) {
-    return { shouldRoll: false, reason: "上限" };
+  if (!state.canRoll) {
+    return { shouldRoll: false, reason: "上限", turn };
   }
 
-  return { shouldRoll: true, reason: "目なし" };
+  return { shouldRoll: true, reason: "目なし", turn };
+}
+
+export function normalizeCoin(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return 0;
+  return Math.max(0, Math.floor(amount));
+}
+
+export function createCpuPlayers(count = 0, startOrder = 1, currentHumanCount = 1) {
+  const humanCount = Math.max(1, Number(currentHumanCount || 1));
+  const maxCpuCount = Math.max(0, MAX_TOTAL_PLAYERS - humanCount);
+  const safeCount = Math.max(0, Math.min(maxCpuCount, Number(count || 0)));
+
+  return Array.from({ length: safeCount }, (_, index) => {
+    const order = startOrder + index;
+    return {
+      id: `cpu_${index + 1}`,
+      name: CPU_NAMES[index] || `CPU ${index + 1}`,
+      isCpu: true,
+      avatarUrl: "",
+      coin: 0,
+      isParent: false,
+      finalHandName: "未確定",
+      joinedAt: Date.now() + index,
+      order,
+    };
+  });
+}
+
+export function createHumanPlayer(data = {}, order = 1) {
+  return {
+    id: String(data.id || `player_${order}`),
+    name: String(data.name || "参加者").trim() || "参加者",
+    isCpu: false,
+    avatarUrl: String(data.avatarUrl || "").trim(),
+    coin: normalizeCoin(data.coin),
+    isParent: false,
+    finalHandName: "未確定",
+    joinedAt: Number(data.joinedAt || Date.now()),
+    order,
+  };
+}
+
+export function assignParent(players = [], parentId = "") {
+  return players.map((player, index) => {
+    const nextPlayer = {
+      ...player,
+      order: Number(player.order || index + 1),
+      isParent: false,
+    };
+    if (parentId) {
+      nextPlayer.isParent = nextPlayer.id === parentId;
+      return nextPlayer;
+    }
+    nextPlayer.isParent = index === 0;
+    return nextPlayer;
+  });
+}
+
+export function chooseRandomParent(players = []) {
+  if (!Array.isArray(players) || !players.length) {
+    return { players: [], parentId: "" };
+  }
+
+  const index = Math.floor(Math.random() * players.length);
+  const parentId = String(players[index] && players[index].id || "");
+
+  return {
+    players: assignParent(players, parentId),
+    parentId,
+  };
+}
+
+export function rotateParent(players = []) {
+  const next = chooseRandomParent(players);
+  return next.players;
+}
+
+export function orderPlayersForRound(players = []) {
+  if (!Array.isArray(players) || !players.length) return [];
+  const parent = players.find((player) => player.isParent);
+  const children = players.filter((player) => !player.isParent);
+  return parent ? [parent, ...children] : [...players];
+}
+
+export function applyRoundResult(players = [], resultsMap = {}) {
+  return players.map((player) => {
+    const entry = resultsMap[player.id];
+    const result = normalizeResult(entry);
+    const rollCount = entry && typeof entry === "object" && Number(entry.rollCount || 0) > 0
+      ? Number(entry.rollCount || 0)
+      : 0;
+    const label = result && result.handName ? result.handName : "未確定";
+    return {
+      ...player,
+      finalHandName: rollCount ? `${label} / ${rollCount}回目` : label,
+    };
+  });
+}
+
+export function getPlayerById(players = [], playerId = "") {
+  return players.find((player) => player.id === playerId) || null;
+}
+
+export function getParentPlayer(players = []) {
+  return players.find((player) => player.isParent) || null;
+}
+
+export function rankRoundResults(resultsMap = {}) {
+  const entries = Object.entries(resultsMap)
+    .map(([playerId, result]) => ({ playerId, result: normalizeResult(result) }))
+    .sort((left, right) => right.result.rank - left.result.rank);
+
+  if (!entries.length) {
+    return {
+      winnerIds: [],
+      winningResult: null,
+      ordered: [],
+    };
+  }
+
+  const winningRank = entries[0].result.rank;
+  return {
+    winnerIds: entries.filter((entry) => entry.result.rank === winningRank).map((entry) => entry.playerId),
+    winningResult: entries[0].result,
+    ordered: entries,
+  };
+}
+
+export function getMaxTotalPlayers() {
+  return MAX_TOTAL_PLAYERS;
+}
+
+export function getMaxPlayerRolls() {
+  return MAX_PLAYER_ROLLS;
+}
+
+export function getMaxCpuCount(currentHumanCount = 1) {
+  const humanCount = Math.max(1, Number(currentHumanCount || 1));
+  return Math.max(0, MAX_TOTAL_PLAYERS - humanCount);
 }
 
 function normalizeResult(result) {
+  if (result && typeof result === "object") {
+    if (result.finalResult && typeof result.finalResult === "object") {
+      return result.finalResult;
+    }
+    if (result.currentResult && typeof result.currentResult === "object") {
+      return result.currentResult;
+    }
+  }
+
   if (!result || typeof result !== "object") {
     return buildResult([], "INVALID", "不正", -1, -1, "判定不可", false, 0);
   }
@@ -185,3 +357,5 @@ function buildResult(dice, hand, handName, rank, score, strengthText, retry, pay
     payoutRate,
   };
 }
+
+

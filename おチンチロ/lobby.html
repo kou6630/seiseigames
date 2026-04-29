@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>おチンチロ</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      font-family: "Yu Gothic UI", "Hiragino Sans", "Meiryo", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(255, 215, 120, 0.14), transparent 32%),
+        linear-gradient(180deg, #12070a 0%, #1f0d12 45%, #0b0507 100%);
+      color: #fff7ef;
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .bg-glow {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255, 170, 90, 0.12), transparent 20%),
+        radial-gradient(circle at 80% 30%, rgba(255, 120, 120, 0.10), transparent 24%),
+        radial-gradient(circle at 50% 85%, rgba(255, 220, 120, 0.08), transparent 28%);
+      filter: blur(10px);
+    }
+
+    .wrap {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .panel {
+      width: min(680px, 100%);
+      padding: 44px 40px 36px;
+      border-radius: 28px;
+      background: rgba(20, 8, 12, 0.78);
+      border: 1px solid rgba(255, 230, 200, 0.12);
+      box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+    }
+
+    .title-box {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .sub {
+      font-size: 14px;
+      letter-spacing: 0.32em;
+      color: rgba(255, 235, 215, 0.7);
+      margin-left: 0.32em;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(48px, 8vw, 88px);
+      line-height: 1;
+      letter-spacing: 0.08em;
+      color: #ffe0b2;
+      text-shadow:
+        0 0 18px rgba(255, 185, 110, 0.25),
+        0 6px 24px rgba(0, 0, 0, 0.45);
+    }
+
+    .form {
+      width: min(420px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field label {
+      font-size: 14px;
+      color: rgba(255, 236, 219, 0.88);
+      padding-left: 2px;
+    }
+
+    .field input {
+      width: 100%;
+      height: 54px;
+      border: 1px solid rgba(255, 220, 190, 0.18);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff8f1;
+      padding: 0 16px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    .field input::placeholder {
+      color: rgba(255, 235, 220, 0.35);
+    }
+
+    .field input:focus {
+      border-color: rgba(255, 196, 120, 0.62);
+      background: rgba(255, 255, 255, 0.09);
+      box-shadow: 0 0 0 4px rgba(255, 180, 100, 0.10);
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 6px;
+    }
+
+    .enter-btn {
+      width: 100%;
+      height: 56px;
+      border: 0;
+      border-radius: 16px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #2c1209;
+      background: linear-gradient(180deg, #ffd28f 0%, #ffb860 100%);
+      box-shadow:
+        0 10px 24px rgba(255, 157, 77, 0.24),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    }
+
+    .enter-btn:hover {
+      transform: translateY(-1px);
+      box-shadow:
+        0 14px 28px rgba(255, 157, 77, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      filter: brightness(1.02);
+    }
+
+    .enter-btn:active {
+      transform: translateY(1px);
+    }
+
+    .enter-btn:disabled {
+      opacity: 0.72;
+      cursor: default;
+      transform: none;
+      filter: grayscale(0.18);
+    }
+
+    .note {
+      min-height: 22px;
+      margin: 0;
+      text-align: center;
+      font-size: 14px;
+      color: rgba(255, 233, 211, 0.78);
+    }
+
+    @media (max-width: 640px) {
+      .panel {
+        padding: 32px 20px 24px;
+        border-radius: 22px;
+        gap: 22px;
+      }
+
+      .field input,
+      .enter-btn {
+        height: 50px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <div class="wrap">
+    <main class="panel">
+      <div class="title-box">
+        <div class="sub">OCHINCHIRO BEST BODY</div>
+        <h1>おチンチロ</h1>
+      </div>
+
+      <form class="form" id="homeForm" autocomplete="off">
+        <div class="field">
+          <label for="roomWord">合言葉</label>
+          <input id="roomWord" name="roomWord" type="text" maxlength="24" placeholder="合言葉を入力" />
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="enter-btn">入場する</button>
+          <p class="note" id="message"></p>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <script type="module">
+    import { onUserChanged, db, ref, get, set, update } from "../shared/firebase.js";
+    import { getUserData } from "../shared/userDate.js";
+
+    const ROOM_WORD_KEY = "ochinchiro_room_word";
+    const ROOM_ID_KEY = "ochinchiro_room_id";
+    const PLAYER_ID_KEY = "ochinchiro_player_id";
+
+    const form = document.getElementById("homeForm");
+    const roomWordInput = document.getElementById("roomWord");
+    const message = document.getElementById("message");
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    let currentUser = null;
+    let currentProfile = null;
+
+    function showMessage(text) {
+      message.textContent = text;
+    }
+
+    function sanitizeRoomWord(value) {
+      return String(value || "").trim().replace(/\s+/g, " ").slice(0, 24);
+    }
+
+    function createPlayerId() {
+      const saved = localStorage.getItem(PLAYER_ID_KEY);
+      if (saved) return saved;
+      const created = `p_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem(PLAYER_ID_KEY, created);
+      return created;
+    }
+
+    function createRoomIdFromWord(roomWord) {
+      return `room_${encodeURIComponent(roomWord.toLowerCase())}`;
+    }
+
+    async function ensureRoom(roomId, roomWord) {
+      const roomRef = ref(db, `ochinchiroRooms/${roomId}`);
+      const snapshot = await get(roomRef);
+      const roomData = snapshot.exists() ? (snapshot.val() || {}) : {};
+      const players = roomData && typeof roomData.players === "object" && roomData.players ? roomData.players : {};
+      const humanCount = Object.values(players).filter((player) => player && !player.isCpu).length;
+      const shouldRebuild = !snapshot.exists() || humanCount === 0;
+
+      if (shouldRebuild) {
+        await set(roomRef, {
+          roomId,
+          roomWord,
+          status: "waiting",
+          masterPlayerId: createPlayerId(),
+          cpuCount: 0,
+          currentTurnIndex: 0,
+          parentPlayerId: "",
+          turnOrder: [],
+          roundResults: {},
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+        return;
+      }
+
+      await update(roomRef, {
+        roomWord,
+        updatedAt: Date.now(),
+      });
+    }
+
+    async function upsertPlayer(roomId) {
+      const playerId = createPlayerId();
+      const profile = currentProfile || {};
+      const playerRef = ref(db, `ochinchiroRooms/${roomId}/players/${playerId}`);
+
+      await set(playerRef, {
+        playerId,
+        uid: String(currentUser && currentUser.uid || ""),
+        name: String(profile.nickname || profile.name || currentUser.displayName || "参加者").trim() || "参加者",
+        avatarUrl: String(profile.selectedAvatarImage || "").trim(),
+        coin: Number(profile.coin || 0),
+        isCpu: false,
+        joinedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
+
+    roomWordInput.value = localStorage.getItem(ROOM_WORD_KEY) || "";
+
+    onUserChanged(async (user) => {
+      if (!user) {
+        window.location.href = "../index.html";
+        return;
+      }
+      currentUser = user;
+      try {
+        currentProfile = await getUserData(user);
+      } catch (error) {
+        console.error(error);
+      }
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const roomWord = sanitizeRoomWord(roomWordInput.value);
+      if (!roomWord) {
+        showMessage("合言葉を入力してください。");
+        roomWordInput.focus();
+        return;
+      }
+
+      if (!currentUser) {
+        showMessage("ログイン確認中です。");
+        return;
+      }
+
+      const roomId = createRoomIdFromWord(roomWord);
+      localStorage.setItem(ROOM_WORD_KEY, roomWord);
+      localStorage.setItem(ROOM_ID_KEY, roomId);
+      showMessage("ゲームルームを開いています。");
+      if (submitButton) submitButton.disabled = true;
+
+      try {
+        await ensureRoom(roomId, roomWord);
+        await upsertPlayer(roomId);
+        window.location.href = "./gameroom.html";
+      } catch (error) {
+        console.error(error);
+        if (submitButton) submitButton.disabled = false;
+        showMessage("ゲームルーム表示に失敗しました。");
+      }
+    });
+  </script>
+</body>
+</html>
