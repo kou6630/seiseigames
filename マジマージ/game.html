@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Merge Gossip</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="game-page">
+    <div id="gameTopbarMount" class="topbar-mount"></div>
+
+    <div class="game-container">
+    <div class="board-area">
+        <canvas id="gameCanvas"></canvas>
+        <div class="item-info" id="itemInfo">
+            <div class="item-info-title" id="itemInfoName"></div>
+            <div class="item-info-detail" id="itemInfoDetail"></div>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="stats">
+            ⚡ スタミナ: <span id="energy">100</span><br>
+            ⭐ スター: <span id="stars" class="star-coin">0</span>
+        </div>
+
+        <div class="order-card" id="orderUI">
+            <h3>お客様の注文</h3>
+            <div id="orderDetail">パン Lv.2 を1つ</div>
+            <button class="btn-deliver" id="deliverBtn" disabled>納品する</button>
+        </div>
+    </div>
+    </div>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,112 @@
+body {
+    background: #1a1a2e;
+    min-height: 100vh;
+    margin: 0;
+    padding: clamp(8px, 2vw, 20px);
+    font-family: sans-serif;
+    color: white;
+    overflow: hidden;
+}
+
+.game-page {
+    width: min-content;
+    max-width: none;
+    margin: 0 auto;
+    transform-origin: top center;
+}
+
+.topbar-mount {
+    margin-bottom: 18px;
+}
+
+.game-container {
+    display: flex;
+    gap: clamp(14px, 2.5vw, 32px);
+    background: rgba(255,255,255,0.05);
+    padding: clamp(14px, 2.5vw, 32px);
+    border-radius: 24px;
+    max-width: 100%;
+}
+
+.sidebar {
+    width: clamp(200px, 22vw, 260px);
+    display: flex;
+    flex-direction: column;
+    gap: clamp(12px, 2vw, 20px);
+    flex-shrink: 0;
+}
+
+.order-card {
+    background: #16213e;
+    padding: 15px;
+    border-radius: 12px;
+    border-left: 5px solid #e94560;
+    text-align: center;
+}
+
+.stats {
+    background: #0f3460;
+    padding: 15px;
+    border-radius: 12px;
+    font-size: 18px;
+    line-height: 1.6;
+}
+
+.btn-deliver {
+    background: #e94560;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    width: 100%;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.btn-deliver:disabled {
+    background: #555;
+    cursor: not-allowed;
+}
+
+.board-area {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+canvas {
+    background: #f0f2f5;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.star-coin {
+    color: #f9d423;
+    font-weight: bold;
+}
+
+.help-text {
+    font-size: 12px;
+    color: #aaa;
+}
+
+.item-info {
+    background: #16213e;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border-left: 5px solid #4ecca3;
+}
+
+.item-info-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+
+.item-info-detail {
+    font-size: 14px;
+    color: #cbd5e1;
+}
+
+
